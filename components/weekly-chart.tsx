@@ -1,6 +1,5 @@
 "use client"
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
   BarChart,
   Bar,
@@ -21,52 +20,50 @@ const weekData = [
   { day: "Dom", mensagens: 12 },
 ]
 
-const CHART_COLOR = "#0ea5e9"
-
 export function WeeklyChart() {
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base font-semibold">Mensagens por Dia da Semana</CardTitle>
-      </CardHeader>
-      <CardContent>
+    <div className="rounded-xl border border-border bg-card">
+      <div className="px-6 py-4 border-b border-border">
+        <h3 className="text-base font-semibold text-card-foreground">Mensagens por Dia</h3>
+      </div>
+      <div className="p-6">
         <div className="h-[280px] w-full">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={weekData} barCategoryGap="20%">
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
               <XAxis
                 dataKey="day"
                 tickLine={false}
                 axisLine={false}
                 fontSize={12}
-                stroke="hsl(var(--muted-foreground))"
+                stroke="#64748b"
               />
               <YAxis
                 tickLine={false}
                 axisLine={false}
                 fontSize={12}
-                stroke="hsl(var(--muted-foreground))"
+                stroke="#64748b"
               />
               <Tooltip
-                cursor={{ fill: "hsl(var(--muted))", opacity: 0.5 }}
+                cursor={{ fill: "#f1f5f9", opacity: 0.5 }}
                 contentStyle={{
-                  backgroundColor: "hsl(var(--card))",
-                  border: "1px solid hsl(var(--border))",
+                  backgroundColor: "#ffffff",
+                  border: "1px solid #e2e8f0",
                   borderRadius: "8px",
                   fontSize: "12px",
                 }}
-                labelStyle={{ color: "hsl(var(--foreground))", fontWeight: 600 }}
+                labelStyle={{ color: "#0f172a", fontWeight: 600 }}
               />
               <Bar
                 dataKey="mensagens"
-                fill={CHART_COLOR}
+                fill="#0ea5e9"
                 radius={[6, 6, 0, 0]}
                 name="Mensagens"
               />
             </BarChart>
           </ResponsiveContainer>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   )
 }

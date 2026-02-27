@@ -2,8 +2,6 @@
 
 import useSWR from "swr"
 import { fetchReports } from "@/lib/api"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
 import {
   CalendarCheck,
   HelpCircle,
@@ -27,7 +25,6 @@ import {
   Pie,
   Cell,
 } from "recharts"
-import { Skeleton } from "@/components/ui/skeleton"
 
 const weekData = [
   { day: "Seg", mensagens: 42, resolvidas: 36 },
@@ -46,9 +43,6 @@ const monthTrend = [
   { week: "Sem 4", agendamentos: 51, duvidas: 94 },
 ]
 
-const CHART_PRIMARY = "#0ea5e9"
-const CHART_ACCENT = "#10b981"
-
 const satisfactionData = [
   { name: "Muito Satisfeito", value: 52, color: "#10b981" },
   { name: "Satisfeito", value: 30, color: "#0ea5e9" },
@@ -58,10 +52,10 @@ const satisfactionData = [
 
 function ReportCardLoading() {
   return (
-    <div className="rounded-xl border border-border bg-card p-6">
-      <Skeleton className="h-4 w-32 mb-4" />
-      <Skeleton className="h-8 w-20 mb-2" />
-      <Skeleton className="h-3 w-24" />
+    <div className="rounded-xl border border-border bg-card p-6 animate-pulse">
+      <div className="h-4 w-32 rounded bg-muted mb-4" />
+      <div className="h-8 w-20 rounded bg-muted mb-2" />
+      <div className="h-3 w-24 rounded bg-muted" />
     </div>
   )
 }
@@ -77,8 +71,8 @@ export default function ReportsPage() {
           title: "Agendamentos pela IA",
           value: reports.agendamentos_pela_ia,
           icon: CalendarCheck,
-          color: "text-primary",
-          bgColor: "bg-primary/10",
+          iconColor: "#0ea5e9",
+          iconBg: "rgba(14,165,233,0.1)",
           badge: reports.taxa_sucesso_agendamento,
           badgeLabel: "taxa de sucesso",
         },
@@ -86,8 +80,8 @@ export default function ReportsPage() {
           title: "Duvidas Resolvidas sem Humano",
           value: reports.duvidas_resolvidas_sem_humano,
           icon: HelpCircle,
-          color: "text-accent",
-          bgColor: "bg-accent/10",
+          iconColor: "#10b981",
+          iconBg: "rgba(16,185,129,0.1)",
           badge: reports.taxa_sucesso_duvidas,
           badgeLabel: "resolvidas automaticamente",
         },
@@ -95,8 +89,8 @@ export default function ReportsPage() {
           title: "Cancelamentos Processados",
           value: reports.cancelamentos_processados,
           icon: XCircle,
-          color: "text-chart-5",
-          bgColor: "bg-chart-5/10",
+          iconColor: "#ef4444",
+          iconBg: "rgba(239,68,68,0.1)",
           badge: null,
           badgeLabel: "este mes",
         },
@@ -104,8 +98,8 @@ export default function ReportsPage() {
           title: "Reagendamentos Automaticos",
           value: reports.reagendamentos_automaticos,
           icon: RefreshCw,
-          color: "text-chart-3",
-          bgColor: "bg-chart-3/10",
+          iconColor: "#0ea5e9",
+          iconBg: "rgba(14,165,233,0.1)",
           badge: null,
           badgeLabel: "este mes",
         },
@@ -113,8 +107,8 @@ export default function ReportsPage() {
           title: "Taxa de Sucesso",
           value: reports.taxa_sucesso_agendamento,
           icon: Target,
-          color: "text-primary",
-          bgColor: "bg-primary/10",
+          iconColor: "#10b981",
+          iconBg: "rgba(16,185,129,0.1)",
           badge: null,
           badgeLabel: "agendamentos confirmados",
         },
@@ -122,8 +116,8 @@ export default function ReportsPage() {
           title: "Satisfacao dos Pacientes",
           value: "82%",
           icon: Smile,
-          color: "text-accent",
-          bgColor: "bg-accent/10",
+          iconColor: "#10b981",
+          iconBg: "rgba(16,185,129,0.1)",
           badge: null,
           badgeLabel: "muito satisfeitos ou satisfeitos",
         },
@@ -139,160 +133,108 @@ export default function ReportsPage() {
         </p>
       </div>
 
-      {/* Report Cards */}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {isLoading
           ? Array.from({ length: 6 }).map((_, i) => <ReportCardLoading key={i} />)
           : reportCards.map((card) => (
-              <Card key={card.title} className="relative overflow-hidden">
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">
+              <div key={card.title} className="rounded-xl border border-border bg-card p-6">
+                <div className="flex items-center justify-between pb-2">
+                  <p className="text-sm font-medium text-muted-foreground">
                     {card.title}
-                  </CardTitle>
+                  </p>
                   <div
-                    className={`flex h-9 w-9 items-center justify-center rounded-lg ${card.bgColor}`}
+                    className="flex h-9 w-9 items-center justify-center rounded-lg"
+                    style={{ backgroundColor: card.iconBg }}
                   >
-                    <card.icon className={`h-4.5 w-4.5 ${card.color}`} />
+                    <card.icon className="h-4 w-4" style={{ color: card.iconColor }} />
                   </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex items-center gap-2">
-                    <span className="text-2xl font-bold">
-                      {typeof card.value === "number" ? card.value.toLocaleString("pt-BR") : card.value}
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-2xl font-bold text-card-foreground">
+                    {typeof card.value === "number" ? card.value.toLocaleString("pt-BR") : card.value}
+                  </span>
+                  {card.badge && (
+                    <span className="inline-flex items-center gap-0.5 rounded-full bg-secondary px-2 py-0.5 text-xs font-medium text-secondary-foreground">
+                      <TrendingUp className="h-3 w-3" />
+                      {card.badge}
                     </span>
-                    {card.badge && (
-                      <Badge variant="secondary" className="text-xs">
-                        <TrendingUp className="mr-0.5 h-3 w-3" />
-                        {card.badge}
-                      </Badge>
-                    )}
-                  </div>
-                  <p className="mt-1 text-xs text-muted-foreground">{card.badgeLabel}</p>
-                </CardContent>
-              </Card>
+                  )}
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">{card.badgeLabel}</p>
+              </div>
             ))}
       </div>
 
-      {/* Charts */}
       <div className="grid gap-6 xl:grid-cols-2">
-        {/* Weekly Bar Chart */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base font-semibold">
+        <div className="rounded-xl border border-border bg-card">
+          <div className="px-6 py-4 border-b border-border">
+            <h3 className="text-base font-semibold text-card-foreground">
               Mensagens vs Resolvidas por Dia
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
+            </h3>
+          </div>
+          <div className="p-6">
             <div className="h-[300px] w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={weekData} barCategoryGap="20%">
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-                  <XAxis
-                    dataKey="day"
-                    tickLine={false}
-                    axisLine={false}
-                    fontSize={12}
-                    stroke="hsl(var(--muted-foreground))"
-                  />
-                  <YAxis
-                    tickLine={false}
-                    axisLine={false}
-                    fontSize={12}
-                    stroke="hsl(var(--muted-foreground))"
-                  />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                  <XAxis dataKey="day" tickLine={false} axisLine={false} fontSize={12} stroke="#64748b" />
+                  <YAxis tickLine={false} axisLine={false} fontSize={12} stroke="#64748b" />
                   <Tooltip
-                    cursor={{ fill: "hsl(var(--muted))", opacity: 0.5 }}
-                    contentStyle={{
-                      backgroundColor: "hsl(var(--card))",
-                      border: "1px solid hsl(var(--border))",
-                      borderRadius: "8px",
-                      fontSize: "12px",
-                    }}
-                    labelStyle={{ color: "hsl(var(--foreground))", fontWeight: 600 }}
+                    cursor={{ fill: "#f1f5f9", opacity: 0.5 }}
+                    contentStyle={{ backgroundColor: "#fff", border: "1px solid #e2e8f0", borderRadius: "8px", fontSize: "12px" }}
+                    labelStyle={{ color: "#0f172a", fontWeight: 600 }}
                   />
-                  <Bar dataKey="mensagens" fill={CHART_PRIMARY} radius={[6, 6, 0, 0]} name="Mensagens" />
-                  <Bar dataKey="resolvidas" fill={CHART_ACCENT} radius={[6, 6, 0, 0]} name="Resolvidas" />
+                  <Bar dataKey="mensagens" fill="#0ea5e9" radius={[6, 6, 0, 0]} name="Mensagens" />
+                  <Bar dataKey="resolvidas" fill="#10b981" radius={[6, 6, 0, 0]} name="Resolvidas" />
                 </BarChart>
               </ResponsiveContainer>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
-        {/* Monthly Trend Area Chart */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base font-semibold">
+        <div className="rounded-xl border border-border bg-card">
+          <div className="px-6 py-4 border-b border-border">
+            <h3 className="text-base font-semibold text-card-foreground">
               Tendencia Mensal
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
+            </h3>
+          </div>
+          <div className="p-6">
             <div className="h-[300px] w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={monthTrend}>
                   <defs>
                     <linearGradient id="colorAgendamentos" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor={CHART_PRIMARY} stopOpacity={0.3} />
-                      <stop offset="95%" stopColor={CHART_PRIMARY} stopOpacity={0} />
+                      <stop offset="5%" stopColor="#0ea5e9" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#0ea5e9" stopOpacity={0} />
                     </linearGradient>
                     <linearGradient id="colorDuvidas" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor={CHART_ACCENT} stopOpacity={0.3} />
-                      <stop offset="95%" stopColor={CHART_ACCENT} stopOpacity={0} />
+                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-                  <XAxis
-                    dataKey="week"
-                    tickLine={false}
-                    axisLine={false}
-                    fontSize={12}
-                    stroke="hsl(var(--muted-foreground))"
-                  />
-                  <YAxis
-                    tickLine={false}
-                    axisLine={false}
-                    fontSize={12}
-                    stroke="hsl(var(--muted-foreground))"
-                  />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                  <XAxis dataKey="week" tickLine={false} axisLine={false} fontSize={12} stroke="#64748b" />
+                  <YAxis tickLine={false} axisLine={false} fontSize={12} stroke="#64748b" />
                   <Tooltip
-                    contentStyle={{
-                      backgroundColor: "hsl(var(--card))",
-                      border: "1px solid hsl(var(--border))",
-                      borderRadius: "8px",
-                      fontSize: "12px",
-                    }}
-                    labelStyle={{ color: "hsl(var(--foreground))", fontWeight: 600 }}
+                    contentStyle={{ backgroundColor: "#fff", border: "1px solid #e2e8f0", borderRadius: "8px", fontSize: "12px" }}
+                    labelStyle={{ color: "#0f172a", fontWeight: 600 }}
                   />
-                  <Area
-                    type="monotone"
-                    dataKey="agendamentos"
-                    stroke={CHART_PRIMARY}
-                    fill="url(#colorAgendamentos)"
-                    strokeWidth={2}
-                    name="Agendamentos"
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="duvidas"
-                    stroke={CHART_ACCENT}
-                    fill="url(#colorDuvidas)"
-                    strokeWidth={2}
-                    name="Duvidas Resolvidas"
-                  />
+                  <Area type="monotone" dataKey="agendamentos" stroke="#0ea5e9" fill="url(#colorAgendamentos)" strokeWidth={2} name="Agendamentos" />
+                  <Area type="monotone" dataKey="duvidas" stroke="#10b981" fill="url(#colorDuvidas)" strokeWidth={2} name="Duvidas Resolvidas" />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
 
-      {/* Satisfaction Pie Chart */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base font-semibold">
+      <div className="rounded-xl border border-border bg-card">
+        <div className="px-6 py-4 border-b border-border">
+          <h3 className="text-base font-semibold text-card-foreground">
             Satisfacao dos Pacientes
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
+          </h3>
+        </div>
+        <div className="p-6">
           <div className="flex flex-col items-center gap-6 sm:flex-row sm:justify-center">
             <div className="h-[220px] w-[220px]">
               <ResponsiveContainer width="100%" height="100%">
@@ -311,12 +253,7 @@ export default function ReportsPage() {
                     ))}
                   </Pie>
                   <Tooltip
-                    contentStyle={{
-                      backgroundColor: "hsl(var(--card))",
-                      border: "1px solid hsl(var(--border))",
-                      borderRadius: "8px",
-                      fontSize: "12px",
-                    }}
+                    contentStyle={{ backgroundColor: "#fff", border: "1px solid #e2e8f0", borderRadius: "8px", fontSize: "12px" }}
                     formatter={(value: number) => [`${value}%`, ""]}
                   />
                 </PieChart>
@@ -329,14 +266,14 @@ export default function ReportsPage() {
                     className="h-3 w-3 rounded-full shrink-0"
                     style={{ backgroundColor: item.color }}
                   />
-                  <span className="text-sm">{item.name}</span>
-                  <span className="text-sm font-semibold ml-auto">{item.value}%</span>
+                  <span className="text-sm text-card-foreground">{item.name}</span>
+                  <span className="text-sm font-semibold text-card-foreground ml-auto">{item.value}%</span>
                 </div>
               ))}
             </div>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   )
 }

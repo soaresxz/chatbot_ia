@@ -1,10 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { cn } from "@/lib/utils"
 import { Bot, User, ArrowRight } from "lucide-react"
 import { takeOverConversation } from "@/lib/api"
 import type { Conversation } from "@/lib/api"
@@ -43,12 +40,11 @@ function formatTime(timestamp: string) {
   return date.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })
 }
 
-const avatarColors = [
-  "bg-primary/15 text-primary",
-  "bg-accent/15 text-accent",
-  "bg-chart-3/15 text-chart-3",
-  "bg-chart-4/15 text-chart-4",
-  "bg-chart-5/15 text-chart-5",
+const avatarBgs = [
+  { bg: "bg-primary/15", text: "text-primary" },
+  { bg: "bg-accent/15", text: "text-accent" },
+  { bg: "bg-secondary", text: "text-secondary-foreground" },
+  { bg: "bg-muted", text: "text-muted-foreground" },
 ]
 
 export function RecentConversations({ conversations }: RecentConversationsProps) {
@@ -64,80 +60,80 @@ export function RecentConversations({ conversations }: RecentConversationsProps)
   }
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle className="text-base font-semibold">Conversas Recentes</CardTitle>
-        <Button variant="ghost" size="sm" className="text-primary" asChild>
-          <a href="/conversations">
-            Ver todas
-            <ArrowRight className="ml-1 h-3.5 w-3.5" />
-          </a>
-        </Button>
-      </CardHeader>
-      <CardContent className="p-0">
-        <div className="divide-y divide-border">
-          {conversations.slice(0, 5).map((conv, i) => {
-            const name = patientNames[conv.phone] || conv.phone
-            const initials = patientNames[conv.phone]
-              ? getInitials(patientNames[conv.phone])
-              : "#"
-            const isLoading = loadingPhone === conv.phone
+    <div className="rounded-xl border border-border bg-card">
+      <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+        <h3 className="text-base font-semibold text-card-foreground">Conversas Recentes</h3>
+        <a
+          href="/conversations"
+          className="flex items-center gap-1 text-sm font-medium text-primary hover:text-primary/80 transition-colors"
+        >
+          Ver todas
+          <ArrowRight className="h-3.5 w-3.5" />
+        </a>
+      </div>
+      <div className="divide-y divide-border">
+        {conversations.slice(0, 5).map((conv, i) => {
+          const name = patientNames[conv.phone] || conv.phone
+          const initials = patientNames[conv.phone]
+            ? getInitials(patientNames[conv.phone])
+            : "#"
+          const isLoading = loadingPhone === conv.phone
+          const color = avatarBgs[i % avatarBgs.length]
 
-            return (
-              <div
-                key={conv.phone}
-                className="flex items-center gap-4 px-6 py-4 transition-colors hover:bg-muted/50"
-              >
-                <Avatar className="h-10 w-10 shrink-0">
-                  <AvatarFallback className={avatarColors[i % avatarColors.length] + " text-xs font-semibold"}>
-                    {initials}
-                  </AvatarFallback>
-                </Avatar>
+          return (
+            <div
+              key={conv.phone}
+              className="flex items-center gap-4 px-6 py-4 transition-colors hover:bg-muted/50"
+            >
+              <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-xs font-semibold", color.bg, color.text)}>
+                {initials}
+              </div>
 
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium truncate">{name}</span>
-                    <Badge
-                      variant={conv.status === "Bot" ? "secondary" : "outline"}
-                      className="text-[10px] px-1.5 py-0 h-5 shrink-0"
-                    >
-                      {conv.status === "Bot" ? (
-                        <Bot className="mr-0.5 h-3 w-3" />
-                      ) : (
-                        <User className="mr-0.5 h-3 w-3" />
-                      )}
-                      {conv.status}
-                    </Badge>
-                    {conv.unread > 0 && (
-                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground shrink-0">
-                        {conv.unread}
-                      </span>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-card-foreground truncate">{name}</span>
+                  <span
+                    className={cn(
+                      "inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[10px] font-medium",
+                      conv.status === "Bot"
+                        ? "bg-secondary text-secondary-foreground"
+                        : "border border-border text-muted-foreground"
                     )}
-                  </div>
-                  <p className="mt-0.5 text-xs text-muted-foreground truncate">
-                    {conv.last_message}
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-3 shrink-0">
-                  <span className="text-xs text-muted-foreground">{formatTime(conv.timestamp)}</span>
-                  {conv.status === "Bot" && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-8 text-xs"
-                      onClick={() => handleTakeOver(conv.phone)}
-                      disabled={isLoading}
-                    >
-                      {isLoading ? "Assumindo..." : "Assumir Conversa"}
-                    </Button>
+                  >
+                    {conv.status === "Bot" ? (
+                      <Bot className="h-3 w-3" />
+                    ) : (
+                      <User className="h-3 w-3" />
+                    )}
+                    {conv.status}
+                  </span>
+                  {conv.unread > 0 && (
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground shrink-0">
+                      {conv.unread}
+                    </span>
                   )}
                 </div>
+                <p className="mt-0.5 text-xs text-muted-foreground truncate">
+                  {conv.last_message}
+                </p>
               </div>
-            )
-          })}
-        </div>
-      </CardContent>
-    </Card>
+
+              <div className="flex items-center gap-3 shrink-0">
+                <span className="text-xs text-muted-foreground">{formatTime(conv.timestamp)}</span>
+                {conv.status === "Bot" && (
+                  <button
+                    className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-card-foreground hover:bg-muted transition-colors disabled:opacity-50"
+                    onClick={() => handleTakeOver(conv.phone)}
+                    disabled={isLoading}
+                  >
+                    {isLoading ? "Assumindo..." : "Assumir"}
+                  </button>
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
   )
 }

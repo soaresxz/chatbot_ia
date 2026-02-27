@@ -2,15 +2,11 @@
 
 import { useState } from "react"
 import useSWR from "swr"
+import { cn } from "@/lib/utils"
 import { fetchConversations, takeOverConversation, releaseConversation } from "@/lib/api"
 import type { Conversation } from "@/lib/api"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { Input } from "@/components/ui/input"
 import { Bot, User, Search, PhoneForwarded, PhoneOff } from "lucide-react"
-import { useToast } from "@/hooks/use-toast"
+import { toast } from "sonner"
 
 const patientNames: Record<string, string> = {
   "+55 11 99999-0001": "Ana Silva",
@@ -40,12 +36,11 @@ function formatTimestamp(timestamp: string) {
   })
 }
 
-const avatarColors = [
-  "bg-primary/15 text-primary",
-  "bg-accent/15 text-accent",
-  "bg-chart-3/15 text-chart-3",
-  "bg-chart-4/15 text-chart-4",
-  "bg-chart-5/15 text-chart-5",
+const avatarBgs = [
+  { bg: "bg-primary/15", text: "text-primary" },
+  { bg: "bg-accent/15", text: "text-accent" },
+  { bg: "bg-secondary", text: "text-secondary-foreground" },
+  { bg: "bg-muted", text: "text-muted-foreground" },
 ]
 
 export default function ConversationsPage() {
@@ -54,13 +49,12 @@ export default function ConversationsPage() {
   })
   const [searchQuery, setSearchQuery] = useState("")
   const [loadingPhone, setLoadingPhone] = useState<string | null>(null)
-  const { toast } = useToast()
 
   async function handleTakeOver(phone: string) {
     setLoadingPhone(phone)
     try {
       const result = await takeOverConversation(phone)
-      toast({ title: "Conversa assumida", description: result.message })
+      toast.success("Conversa assumida", { description: result.message })
       mutate()
     } finally {
       setLoadingPhone(null)
@@ -70,10 +64,10 @@ export default function ConversationsPage() {
   async function handleRelease() {
     try {
       const result = await releaseConversation()
-      toast({ title: "Bot reativado", description: result.message })
+      toast.success("Bot reativado", { description: result.message })
       mutate()
     } catch {
-      toast({ title: "Erro", description: "Nao foi possivel reativar o bot", variant: "destructive" })
+      toast.error("Erro", { description: "Nao foi possivel reativar o bot" })
     }
   }
 
@@ -96,29 +90,33 @@ export default function ConversationsPage() {
             Gerencie as conversas com seus pacientes
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={handleRelease}>
-          <PhoneOff className="mr-1.5 h-3.5 w-3.5" />
+        <button
+          onClick={handleRelease}
+          className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-muted transition-colors"
+        >
+          <PhoneOff className="h-3.5 w-3.5" />
           Reativar Bot
-        </Button>
+        </button>
       </div>
 
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
+        <input
+          type="text"
           placeholder="Buscar por nome, telefone ou mensagem..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="pl-9"
+          className="w-full rounded-md border border-input bg-background px-3 py-2 pl-9 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
         />
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base font-semibold">
+      <div className="rounded-xl border border-border bg-card">
+        <div className="px-6 py-4 border-b border-border">
+          <h3 className="text-base font-semibold text-card-foreground">
             {filtered.length} conversa{filtered.length !== 1 ? "s" : ""}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
+          </h3>
+        </div>
+        <div>
           {isLoading ? (
             <div className="flex items-center justify-center py-12">
               <p className="text-sm text-muted-foreground">Carregando conversas...</p>
@@ -135,34 +133,35 @@ export default function ConversationsPage() {
                   ? getInitials(patientNames[conv.phone])
                   : "#"
                 const isProcessing = loadingPhone === conv.phone
+                const color = avatarBgs[i % avatarBgs.length]
 
                 return (
                   <div
                     key={conv.phone}
                     className="flex items-center gap-4 px-6 py-4 transition-colors hover:bg-muted/50"
                   >
-                    <Avatar className="h-11 w-11 shrink-0">
-                      <AvatarFallback
-                        className={avatarColors[i % avatarColors.length] + " text-xs font-semibold"}
-                      >
-                        {initials}
-                      </AvatarFallback>
-                    </Avatar>
+                    <div className={cn("flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-xs font-semibold", color.bg, color.text)}>
+                      {initials}
+                    </div>
 
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-0.5">
-                        <span className="text-sm font-medium">{name}</span>
-                        <Badge
-                          variant={conv.status === "Bot" ? "secondary" : "outline"}
-                          className="text-[10px] px-1.5 py-0 h-5 shrink-0"
+                        <span className="text-sm font-medium text-card-foreground">{name}</span>
+                        <span
+                          className={cn(
+                            "inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[10px] font-medium shrink-0",
+                            conv.status === "Bot"
+                              ? "bg-secondary text-secondary-foreground"
+                              : "border border-border text-muted-foreground"
+                          )}
                         >
                           {conv.status === "Bot" ? (
-                            <Bot className="mr-0.5 h-3 w-3" />
+                            <Bot className="h-3 w-3" />
                           ) : (
-                            <User className="mr-0.5 h-3 w-3" />
+                            <User className="h-3 w-3" />
                           )}
                           {conv.status}
-                        </Badge>
+                        </span>
                         {conv.unread > 0 && (
                           <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground">
                             {conv.unread}
@@ -177,20 +176,18 @@ export default function ConversationsPage() {
 
                     <div className="shrink-0">
                       {conv.status === "Bot" ? (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-8 text-xs"
+                        <button
+                          className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-xs font-medium hover:bg-muted transition-colors disabled:opacity-50"
                           onClick={() => handleTakeOver(conv.phone)}
                           disabled={isProcessing}
                         >
-                          <PhoneForwarded className="mr-1 h-3.5 w-3.5" />
+                          <PhoneForwarded className="h-3.5 w-3.5" />
                           {isProcessing ? "Assumindo..." : "Assumir"}
-                        </Button>
+                        </button>
                       ) : (
-                        <Badge variant="outline" className="text-xs text-accent border-accent/30">
+                        <span className="inline-flex items-center rounded-full border border-accent/30 px-2 py-0.5 text-xs text-accent font-medium">
                           Atendimento humano
-                        </Badge>
+                        </span>
                       )}
                     </div>
                   </div>
@@ -198,8 +195,8 @@ export default function ConversationsPage() {
               })}
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   )
 }
