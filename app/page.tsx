@@ -1,59 +1,66 @@
-import { MessageSquare, Users, TrendingUp, Timer } from "lucide-react"
-import { StatCard } from "@/components/stat-card"
-import { MessagesChart } from "@/components/messages-chart"
-import { MetricCards } from "@/components/metric-cards"
-import { RecentActivity } from "@/components/recent-activity"
+'use client';
 
-const stats = [
-  {
-    title: "Mensagens Enviadas",
-    value: "1.284",
-    change: "+12.5%",
-    changeType: "positive" as const,
-    icon: MessageSquare,
-  },
-  {
-    title: "Pacientes Atendidos",
-    value: "348",
-    change: "+8.2%",
-    changeType: "positive" as const,
-    icon: Users,
-  },
-  {
-    title: "Taxa de Conversao",
-    value: "68.4%",
-    change: "+3.1%",
-    changeType: "positive" as const,
-    icon: TrendingUp,
-  },
-  {
-    title: "Tempo Medio de Resposta",
-    value: "1.2s",
-    change: "-0.3s",
-    changeType: "positive" as const,
-    icon: Timer,
-  },
-]
+import { useState, useEffect } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-export default function HomePage() {
+export default function Dashboard() {
+  const [stats, setStats] = useState({
+    mensagens_enviadas: 0,
+    pacientes_atendidos: 0,
+    taxa_conversao: 0,
+    tempo_medio: "0s"
+  });
+
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch('http://localhost:8000/dashboard/stats')
+      .then(res => res.json())
+      .then(data => {
+        setStats(data);
+        setLoading(false);
+      })
+      .catch(err => {
+        console.error("Erro ao carregar stats", err);
+        setLoading(false);
+      });
+  }, []);
+
+  if (loading) return <div className="p-8">Carregando dados...</div>;
+
   return (
-    <div className="flex flex-col gap-6">
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {stats.map((stat) => (
-          <StatCard key={stat.title} {...stat} />
-        ))}
-      </div>
+    <div className="p-8">
+      <h1 className="text-4xl font-bold mb-8">Visão Geral</h1>
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
-        <div className="xl:col-span-2">
-          <MessagesChart />
-        </div>
-        <div>
-          <MetricCards />
-        </div>
-      </div>
+      <div className="grid grid-cols-4 gap-6">
+        <Card>
+          <CardHeader><CardTitle>Mensagens Enviadas</CardTitle></CardHeader>
+          <CardContent>
+            <p className="text-5xl font-bold">{stats.mensagens_enviadas}</p>
+          </CardContent>
+        </Card>
 
-      <RecentActivity />
+        <Card>
+          <CardHeader><CardTitle>Pacientes Atendidos</CardTitle></CardHeader>
+          <CardContent>
+            <p className="text-5xl font-bold">{stats.pacientes_atendidos}</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader><CardTitle>Taxa de Conversão</CardTitle></CardHeader>
+          <CardContent>
+            <p className="text-5xl font-bold">{stats.taxa_conversao}%</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader><CardTitle>Tempo Médio de Resposta</CardTitle></CardHeader>
+          <CardContent>
+            <p className="text-5xl font-bold">{stats.tempo_medio}</p>
+          </CardContent>
+        </Card>
+      </div>
     </div>
-  )
+  );
 }
