@@ -8,8 +8,5 @@ venv/
 ENV/
 env.bak/
 venv.bak/
-.odontoia_saas.db
+.chatbot.db
 .env
-*.json
-google-sheets-key.json
-chat-bot-planilha-*.json
