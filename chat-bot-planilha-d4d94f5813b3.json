@@ -1,0 +1,13 @@
+{
+  "type": "service_account",
+  "project_id": "chat-bot-planilha",
+  "private_key_id": "d4d94f5813b33b445e8068da7394dccf400de5d5",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDf0yOPv5ltlzdR\nyQdDCgnOdP6PlJQXgWSOZI0kARcCqPOlXnzgExmPOFIgxInscOkK6ryQk6GMtnT+\n7s+oO6EJaTDFb4oVV26gTuFbl3J/YmrNkSbKrKXa/STKo+ARCsHR9Xdy0vH420nY\npFxTZoq1Xauakn2peKDPbL0ipLmWOhQRQV7pzYlAdBOJQ5L+KpbhT3aVk4xdvWGK\nziLolfVhOcN2+flSaARvIQaRef6ZVON7DwHyKk0Gf7pA+IG+cVejdqV5tno5+6pd\n3ndzEA0h9lb1F0Aiu1kxJ1LBtAuxRGPnEdp82sFP/mQksLk1011yIe0Td4hdzIPS\nf0YLGOoVAgMBAAECggEAAhZ9cxkoceXtNYLDNz7gDzWhgkQH4EhBYIqo6Q28NzbN\nlFyonDZ8EI1H8YJOfw7L6GF+13e+aV+dARvH2BvmSVOFNEecFCLip0rVE1OlqnEy\nlIRRcPvh+C76/uDpytQ82/Exkg1MWzPrIRg3Zu0X8iUo3/eUhdYtjyxxKeI7e56T\n8D0gsyzCnZe2l8oAEdAaZ4EGZqxHtgqWNjNWjLFaECYd77oMzxUnaHHNRzJEyVmi\n930n/i6wZWV1rnvcQybGhE3eYiKTIzPSJCFnSvL8XPHR4BwSGxZ/RzwtY4XLd6Cc\nkpT3H11nlUcEAUSy300Gwx78PJeCTm713UuRtGvFAQKBgQD2saGE9pTM40y1CXIp\nqB5guLd9/vKY0p7vVX9E63i7v/fSuyp7U1G/3t7mOPcZIUIM36GMQZVkvzKwnNFf\nbpwFbOg5zDg1RTdrm1fFFTA1m2bMd5f/fCEkqa+jx7zRkvxajPKhTgZHQ+ZkVEhQ\nWZyrG8UT5y+Ubyp9WkHJWAvQtQKBgQDoRKgc0xBX/mCFgzLmwyGd5UXvORmr8ORF\nxP2X52FON+9FG9ngWUZb5yHbz1lOmNavDUcmrp7+k5M3cu5t0pvzZrEHdCQfXH8B\npEmFRb++/NpLbVPkCgOUHis1YijIvNFOFjKcJoNmODsyOaPQbtIrKCBCCgyr7ho5\nK/wFf1hv4QKBgGR5TFOfKlOYb/F7+2dD9btnADTs1VmwztKje8ZSMUYmlYTafh7k\nfHMtDpOtt9YgWYpsupspSvNRfA+6jvvTTPBYvuxrZKktm7jT+Bdo3c23kVLNkraX\nk9ge1E5cV2bz+pvWtCtGYAA+g2NxgFJZbRmzobzNd+94p1GOpSSgG4/RAoGAEwKr\nj9Bmog0b8VGPtPt7oOTHGJFf3IbW6C77Ypd5i2FgoBNrfcVQ0OzWBJuv/5La33EC\nxdO9B7Ekd4Fcqnh2czGQg7+pxTdY3dWIfvP6gbNIWqwUFbIMIO9nMfNayzNJHk8K\nzWUJlDA+CBpXohOv+ABMw5r29ouCcfN7qSeHIYECgYEApgUZP3tM1bfA1UkwB/uA\nR90mHRihwLwzIu1pc8him2FiqYFHF0VO7YjDiYPzmYHz5uazuff0l9PzZ+C7p5Et\nOgX40JT3e9neqqekbu/Qt0v2J19U+o1ThmCX4g6SvTChIfAaj9UPAbvvBVdOOmgo\njiDKm4IBExRI0l9gw/e5Cyg=\n-----END PRIVATE KEY-----\n",
+  "client_email": "odontoia-agenda@chat-bot-planilha.iam.gserviceaccount.com",
+  "client_id": "118171993998439330213",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/odontoia-agenda%40chat-bot-planilha.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
+}

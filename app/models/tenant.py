@@ -1,4 +1,5 @@
 from sqlalchemy import Column, String, Boolean, DateTime, func
+from app.models.appointment import relationship
 from app.core.database import Base
 
 class Tenant(Base):
@@ -14,6 +15,8 @@ class Tenant(Base):
     plan = Column(String, default="basic")# futuro
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, server_default=func.now())
+    appointments = relationship("Appointment", back_populates="tenant", cascade="all, delete-orphan")
+    attendant_phone = Column(String, nullable=True)  # número da atendente (ex: +557981171862)
 
     def __repr__(self):
         return f"<Tenant {self.name}>"
