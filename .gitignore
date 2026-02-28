@@ -10,3 +10,6 @@ env.bak/
 venv.bak/
 .odontoia_saas.db
 .env
+*.json
+google-sheets-key.json
+chat-bot-planilha-*.json
