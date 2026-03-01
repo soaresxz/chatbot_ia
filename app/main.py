@@ -8,7 +8,7 @@ from app.api.v1.dashboard import router as dashboard_router
 from app.api.v1.send_message import router as send_router
 from app.api.v1.human_send import router as human_send_router
 from app.core.websocket_manager import active_connections
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, Query
 from app.core.database import get_db
 from app.models.tenant import Tenant
 from fastapi import Depends              # ← adicione esta linha
@@ -84,29 +84,31 @@ def set_premium(db: Session = Depends(get_db)):
         "plan": tenant.plan
     }
     
-@app.post("/admin/create-tenant")
+@app.get("/admin/create-tenant")
 def create_tenant(
-    name: str,
-    dentist_name: str,
-    whatsapp_number: str,   # ex: "+5511999999999"
-    plan: str = "basic",
+    name: str = Query(..., description="Nome da clínica"),
+    dentist_name: str = Query(..., description="Nome do dentista principal"),
+    whatsapp_number: str = Query(..., description="Número WhatsApp completo (ex: +5511999999999)"),
+    plan: str = Query("basic", description="basic ou premium"),
     db: Session = Depends(get_db)
 ):
     from app.models.tenant import Tenant
 
-    # Verifica se número já existe
+    # Verifica se o número já existe
     existing = db.query(Tenant).filter(Tenant.whatsapp_number == whatsapp_number).first()
     if existing:
-        return {"status": "error", "message": "Número WhatsApp já cadastrado"}
+        return {"status": "error", "message": "❌ Este número de WhatsApp já está cadastrado"}
 
+    # Cria o tenant
     new_tenant = Tenant(
-        id=f"clinica_{name.lower().replace(' ', '_')}",   # ex: clinica_odonto_sorriso
+        id=f"clinica_{name.lower().replace(' ', '_').replace('ã', 'a').replace('ç', 'c')}",
         name=name,
         dentist_name=dentist_name,
         whatsapp_number=whatsapp_number,
         plan=plan,
         is_active=True,
-        attendant_phone=""   # pode preencher depois
+        human_mode_active=False,
+        attendant_phone=""  # pode editar depois
     )
 
     db.add(new_tenant)
@@ -115,7 +117,7 @@ def create_tenant(
 
     return {
         "status": "success",
-        "message": f"Clínica '{name}' criada com sucesso!",
+        "message": f"✅ Clínica '{name}' criada com sucesso!",
         "tenant_id": new_tenant.id,
         "whatsapp_number": new_tenant.whatsapp_number,
         "plan": new_tenant.plan
