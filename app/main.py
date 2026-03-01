@@ -12,9 +12,11 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.models.tenant import Tenant
 from fastapi import Depends, HTTPException, Query
+import os
 
 
-ADMIN_API_KEY = "senhaadminteste"  # ← mude isso e coloque no Railway como variável
+ADMIN_API_KEY = os.getenv("ADMIN_API_KEY")
+  # ← mude isso e coloque no Railway como variável
 
 def verify_admin_key(api_key: str = Query(None, alias="api_key")):
     if not api_key or api_key != ADMIN_API_KEY:
