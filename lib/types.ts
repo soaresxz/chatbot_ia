@@ -22,9 +22,18 @@ export interface Conversation {
   patient_name: string
   patient_phone: string
   last_message: string
+  last_message_time: string
   status: "ai_mode" | "human_mode"
   updated_at: string
   unread_count: number
+}
+
+export interface Message {
+  id: string
+  content: string
+  direction: "in" | "out"
+  timestamp: string
+  sender_name?: string
 }
 
 export interface ApiConfig {
