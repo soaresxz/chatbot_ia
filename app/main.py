@@ -1,4 +1,4 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import Depends, FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 
@@ -9,6 +9,9 @@ from app.api.v1.dashboard import router as dashboard_router
 from app.api.v1.send_message import router as send_router
 from app.api.v1.human_send import router as human_send_router
 from app.core.websocket_manager import active_connections
+from app.services.ai.gemini_agent import get_ai_response
+from sqlalchemy.orm import Session
+from app.core.database import get_db
 
 # ================== APP FASTAPI ==================
 app = FastAPI(
@@ -73,7 +76,47 @@ async def websocket_endpoint(websocket: WebSocket):
 def startup_event():
     create_tables()                      # ← síncrono (sem await)
     print("🚀 Chatbot iniciado com PostgreSQL (síncrono)!")
+    
+@app.get("/setup-tenant")
+def setup_tenant(db: Session = Depends(get_db)):
+    from app.models.tenant import Tenant
+    from sqlalchemy import or_
 
+    # Normaliza o número do sandbox do Twilio
+    sandbox_number = "+14155238886"
+
+    tenant = db.query(Tenant).filter(
+        or_(
+            Tenant.whatsapp_number.ilike(f"%{sandbox_number}%"),
+            Tenant.whatsapp_number.ilike("%14155238886%")
+        )
+    ).first()
+
+    if tenant:
+        return {
+            "status": "already_exists",
+            "id": tenant.id,
+            "name": getattr(tenant, "name", "N/A"),
+            "whatsapp_number": tenant.whatsapp_number
+        }
+
+    # Cria o tenant do sandbox
+    new_tenant = Tenant(
+        name="Twilio Sandbox Test",
+        whatsapp_number=sandbox_number,
+        human_mode_active=False,
+        # se tiver mais campos obrigatórios no seu modelo, adicione aqui
+    )
+    db.add(new_tenant)
+    db.commit()
+    db.refresh(new_tenant)
+
+    return {
+        "status": "created",
+        "id": new_tenant.id,
+        "whatsapp_number": new_tenant.whatsapp_number
+    }    
+    
 # ================== ROOT ==================
 @app.get("/")
 async def root():
