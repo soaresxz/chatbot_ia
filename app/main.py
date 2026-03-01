@@ -80,42 +80,53 @@ def startup_event():
 @app.get("/setup-tenant")
 def setup_tenant(db: Session = Depends(get_db)):
     from app.models.tenant import Tenant
-    from sqlalchemy import or_
+    import traceback
 
-    # Normaliza o número do sandbox do Twilio
-    sandbox_number = "+14155238886"
+    try:
+        sandbox_number = "+14155238886"
 
-    tenant = db.query(Tenant).filter(
-        or_(
-            Tenant.whatsapp_number.ilike(f"%{sandbox_number}%"),
-            Tenant.whatsapp_number.ilike("%14155238886%")
+        # Verifica se já existe
+        existing = db.query(Tenant).filter(
+            Tenant.whatsapp_number.ilike(f"%{sandbox_number}%")
+        ).first()
+
+        if existing:
+            print(f"✅ Tenant já existe: ID={existing.id} | Nome={existing.name}")
+            return {
+                "status": "already_exists",
+                "id": existing.id,
+                "name": existing.name,
+                "whatsapp_number": existing.whatsapp_number
+            }
+
+        # Cria tenant com TODOS os campos obrigatórios
+        new_tenant = Tenant(
+            id="sandbox_twilio",                    # ← obrigatório (primary key)
+            name="Twilio Sandbox Test",             # ← obrigatório
+            dentist_name="Dr. Teste Sandbox",       # ← obrigatório
+            whatsapp_number=sandbox_number,         # ← obrigatório
+            human_mode_active=False,
+            plan="basic",
+            is_active=True,
+            attendant_phone="+557981171862"         # seu número (opcional)
         )
-    ).first()
 
-    if tenant:
+        db.add(new_tenant)
+        db.commit()
+        db.refresh(new_tenant)
+
+        print(f"🎉 Tenant criado com sucesso! ID = {new_tenant.id}")
         return {
-            "status": "already_exists",
-            "id": tenant.id,
-            "name": getattr(tenant, "name", "N/A"),
-            "whatsapp_number": tenant.whatsapp_number
+            "status": "created",
+            "id": new_tenant.id,
+            "name": new_tenant.name,
+            "whatsapp_number": new_tenant.whatsapp_number
         }
 
-    # Cria o tenant do sandbox
-    new_tenant = Tenant(
-        name="Twilio Sandbox Test",
-        whatsapp_number=sandbox_number,
-        human_mode_active=False,
-        # se tiver mais campos obrigatórios no seu modelo, adicione aqui
-    )
-    db.add(new_tenant)
-    db.commit()
-    db.refresh(new_tenant)
-
-    return {
-        "status": "created",
-        "id": new_tenant.id,
-        "whatsapp_number": new_tenant.whatsapp_number
-    }    
+    except Exception as e:
+        print(f"❌ ERRO AO CRIAR TENANT: {e}")
+        traceback.print_exc()   # ← mostra o erro completo no log do Railway
+        return {"status": "error", "message": str(e)}
     
 # ================== ROOT ==================
 @app.get("/")
