@@ -83,6 +83,43 @@ def set_premium(db: Session = Depends(get_db)):
         "tenant_id": tenant.id,
         "plan": tenant.plan
     }
+    
+@app.post("/admin/create-tenant")
+def create_tenant(
+    name: str,
+    dentist_name: str,
+    whatsapp_number: str,   # ex: "+5511999999999"
+    plan: str = "basic",
+    db: Session = Depends(get_db)
+):
+    from app.models.tenant import Tenant
+
+    # Verifica se número já existe
+    existing = db.query(Tenant).filter(Tenant.whatsapp_number == whatsapp_number).first()
+    if existing:
+        return {"status": "error", "message": "Número WhatsApp já cadastrado"}
+
+    new_tenant = Tenant(
+        id=f"clinica_{name.lower().replace(' ', '_')}",   # ex: clinica_odonto_sorriso
+        name=name,
+        dentist_name=dentist_name,
+        whatsapp_number=whatsapp_number,
+        plan=plan,
+        is_active=True,
+        attendant_phone=""   # pode preencher depois
+    )
+
+    db.add(new_tenant)
+    db.commit()
+    db.refresh(new_tenant)
+
+    return {
+        "status": "success",
+        "message": f"Clínica '{name}' criada com sucesso!",
+        "tenant_id": new_tenant.id,
+        "whatsapp_number": new_tenant.whatsapp_number,
+        "plan": new_tenant.plan
+    }
 
 # Root
 @app.get("/")
