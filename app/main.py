@@ -8,6 +8,14 @@ from app.api.v1.dashboard import router as dashboard_router
 from app.api.v1.send_message import router as send_router
 from app.api.v1.human_send import router as human_send_router
 from app.core.websocket_manager import active_connections
+from sqlalchemy.orm import Session
+from app.core.database import get_db
+from app.models.tenant import Tenant
+from app.services.ai.gemini_agent import get_ai_response
+from app.services.whatsapp.service import process_incoming_message
+from app.services.whatsapp.human_handler import handle_attendant_message
+
+
 
 app = FastAPI(
     title="OdontoIA SaaS",
@@ -56,6 +64,27 @@ async def websocket_endpoint(websocket: WebSocket):
 def startup_event():
     create_tables()
     print("🚀 OdontoIA SaaS iniciado com sucesso!")
+    
+# ================== ATIVAR PREMIUM (temporário) ==================
+@app.get("/set-premium")
+def set_premium(db: Session = Depends(get_db)):
+    from app.models.tenant import Tenant
+    from sqlalchemy import update
+
+    tenant = db.query(Tenant).filter(Tenant.id == "sandbox_twilio").first()
+    if not tenant:
+        return {"status": "error", "message": "Tenant não encontrado"}
+
+    tenant.plan = "premium"
+    db.commit()
+    db.refresh(tenant)
+
+    return {
+        "status": "success",
+        "message": "Plano PREMIUM ativado com sucesso!",
+        "tenant_id": tenant.id,
+        "plan": tenant.plan
+    }
 
 # Root
 @app.get("/")
