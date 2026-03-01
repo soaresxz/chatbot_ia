@@ -1,6 +1,6 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from app.core.database import SessionLocal, create_tables
+from app.core.database import get_db, create_tables
 from app.api.v1.webhook import router as webhook_router
 from app.api.v1.dashboard import router as dashboard_router
 from app.api.v1.send_message import router as send_router
