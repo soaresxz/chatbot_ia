@@ -1,43 +1,59 @@
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Depends
+from sqlalchemy.orm import Session
+
 from app.services.whatsapp.service import process_incoming_message
 from app.services.whatsapp.human_handler import handle_attendant_message
-from app.core.database import SessionLocal
+from app.core.database import get_db
 from app.models.tenant import Tenant
+
 import logging
+import traceback
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
 @router.post("/twilio/webhook")
-async def twilio_webhook(request: Request):
-    form = await request.form()
-    
-    from_number = form.get("From", "")          # quem enviou
-    to_number   = form.get("To", "")            # para quem foi enviado
-    body        = form.get("Body", "").strip()
+async def twilio_webhook(
+    request: Request,
+    db: Session = Depends(get_db)   # ← agora síncrono
+):
+    try:
+        form = await request.form()
+        
+        from_number = form.get("From", "").strip()
+        to_number   = form.get("To", "").strip()
+        body        = form.get("Body", "").strip()
 
-    print(f"\n📨 WEBHOOK → From: {from_number} | To: {to_number} | Msg: {body}")
-    
+        print(f"\n📨 [WEBHOOK] Recebido → From: {from_number} | To: {to_number} | Msg: '{body}'")
 
-    db = SessionLocal()
-    tenant = db.query(Tenant).filter(
-        Tenant.whatsapp_number == to_number.replace("whatsapp:", "").replace("+", "").strip()
-    ).first()
-    db.close()
+        # Busca tenant
+        tenant = db.query(Tenant).filter(
+            Tenant.whatsapp_number == to_number.replace("whatsapp:", "").replace("+", "").strip()
+        ).first()
 
-    if not tenant:
-        return {"status": "ignored"}
+        if not tenant:
+            print(f"⚠️  Tenant NÃO encontrado para número: {to_number}")
+            return {"status": "ignored"}
 
-    # ==================== MENSAGEM DA ATENDENTE PARA O PACIENTE ====================
-    # Se o "From" for o número da clínica → é a atendente enviando para o paciente
-    if from_number.replace("whatsapp:", "").replace("+", "") == tenant.whatsapp_number.replace("+", ""):
-        # O "To" é o número do paciente
-        patient_phone = to_number
-        print(f"👩‍💼 ATENDENTE ENVIANDO PARA PACIENTE {patient_phone} → Ativando modo humano")
-        await handle_attendant_message(tenant, patient_phone)
-        return {"status": "human_takeover"}
+        print(f"✅ Tenant encontrado: {tenant.name if hasattr(tenant, 'name') else 'sem nome'}")
 
-    # ==================== MENSAGEM NORMAL DO PACIENTE ====================
-    else:
-        await process_incoming_message(from_number, body, to_number)
+        # Verifica se é mensagem da atendente (modo humano)
+        attendant_clean = tenant.whatsapp_number.replace("whatsapp:", "").replace("+", "").strip()
+        from_clean = from_number.replace("whatsapp:", "").replace("+", "").strip()
+
+        if from_clean == attendant_clean:
+            print(f"👤 MENSAGEM DA ATENDENTE → Modo humano ativado")
+            handle_attendant_message(tenant, to_number)
+            return {"status": "human_takeover"}
+
+        # Mensagem normal do paciente
+        print(f"💬 Processando mensagem do PACIENTE...")
+        process_incoming_message(from_number, body, to_number, db)   # passa o db
+        print(f"✅ Processamento concluído com sucesso!")
+
         return {"status": "processed"}
+
+    except Exception as e:
+        print(f"❌ ERRO CRÍTICO NO WEBHOOK: {e}")
+        traceback.print_exc()
+        return {"status": "error"}
