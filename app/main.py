@@ -11,6 +11,7 @@ from app.api.v1.human_send import router as human_send_router
 from app.core.websocket_manager import active_connections
 from sqlalchemy.orm import Session
 from app.core.database import get_db
+from app.api.v1.conversations import router as conversations_router
 
 app = FastAPI(
     title="OdontoIA SaaS",
@@ -108,6 +109,7 @@ app.include_router(webhook_router, prefix="/api/v1")
 app.include_router(dashboard_router, prefix="/dashboard")
 app.include_router(send_router, prefix="/api")
 app.include_router(human_send_router, prefix="/api")
+app.include_router(conversations_router, prefix="/api/v1")
 
 # WebSocket
 @app.websocket("/ws")
