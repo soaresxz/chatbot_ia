@@ -1,62 +1,51 @@
-from __future__ import annotations  # ← ESSA LINHA RESOLVE 90% dos erros de IDE
-
 import os
-from sqlalchemy.ext.asyncio import create_async_engine
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.ext.asyncio import async_sessionmaker
-from sqlalchemy.orm import declarative_base
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker, declarative_base
 from sqlalchemy import update
 from app.core.config import settings
 
-# Prioridade: Railway > settings
+# Pega DATABASE_URL do Railway (prioridade máxima)
 DATABASE_URL = os.getenv("DATABASE_URL") or getattr(settings, "DATABASE_URL", None)
 
 if not DATABASE_URL:
     raise ValueError("❌ DATABASE_URL não encontrada! Verifique no Railway.")
 
-# Converte para asyncpg (obrigatório no Railway)
-if DATABASE_URL.startswith("postgresql://"):
-    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
-
-engine = create_async_engine(
+# Engine síncrono (igual ao que você usava antes)
+engine = create_engine(
     DATABASE_URL,
-    pool_pre_ping=True,
-    echo=False,
-    future=True,
+    pool_pre_ping=True,   # evita conexões mortas
+    echo=False,           # mude para True só se quiser ver os SQLs
 )
 
-AsyncSessionLocal = async_sessionmaker(
-    bind=engine,
-    class_=AsyncSession,
-    expire_on_commit=False,
-    autoflush=False,
-    autocommit=False,
-)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()
 
-# Dependency para FastAPI
-async def get_db() -> AsyncSession:
-    async with AsyncSessionLocal() as session:
-        yield session
+# Dependency (mantém o mesmo nome que você já usava)
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
-# Reset automático do modo humano (corrigido)
-async def reset_human_modes():
-    from app.models.tenant import Tenant   # ← ajuste se o caminho do seu Tenant for diferente
+# Reset do modo humano (igual ao seu código antigo)
+def reset_human_modes():
+    from app.models.tenant import Tenant   # ajuste o import se necessário
 
-    async with AsyncSessionLocal() as session:
-        stmt = update(Tenant).values(
-            human_mode_active=False,
-            human_mode_until=None
-        )
-        await session.execute(stmt)
-        await session.commit()
-    print("✅ Modo humano resetado para todos os tenants!")
+    db = SessionLocal()
+    try:
+        db.query(Tenant).update({
+            Tenant.human_mode_active: False,
+            Tenant.human_mode_until: None
+        })
+        db.commit()
+        print("✅ Modo humano resetado para todos os tenants!")
+    finally:
+        db.close()
 
-# Criar tabelas + reset
-async def create_tables():
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+# Criar tabelas + reset automático
+def create_tables():
+    Base.metadata.create_all(bind=engine)
     print("✅ Todas as tabelas criadas/verficadas com sucesso!")
-
-    await reset_human_modes()   # reset automático no startup
+    reset_human_modes()
