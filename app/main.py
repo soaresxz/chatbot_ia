@@ -16,10 +16,10 @@ from fastapi import Depends, HTTPException, Query
 
 ADMIN_API_KEY = "senhaadminteste"  # ← mude isso e coloque no Railway como variável
 
-def verify_admin_key(x_api_key: str = Query(None, alias="api_key")):
-    if x_api_key != ADMIN_API_KEY:
-        raise HTTPException(status_code=403, detail="Chave de admin inválida")
-    return True# ← adicione esta linha
+def verify_admin_key(api_key: str = Query(None, alias="api_key")):
+    if not api_key or api_key != ADMIN_API_KEY:
+        raise HTTPException(status_code=403, detail="❌ Chave de admin inválida")
+    return True
 
 
 
@@ -92,19 +92,20 @@ def set_premium(db: Session = Depends(get_db)):
         "plan": tenant.plan
     }
     
-@app.post("/admin/tenants")
+@app.get("/admin/create-tenant")
 def create_tenant(
-    name: str,
-    dentist_name: str,
-    whatsapp_number: str,
-    plan: str = "basic",
+    name: str = Query(..., description="Nome da clínica"),
+    dentist_name: str = Query(..., description="Nome do dentista"),
+    whatsapp_number: str = Query(..., description="Número oficial do WhatsApp da clínica"),
+    plan: str = Query("basic", description="basic ou premium"),
     api_key: bool = Depends(verify_admin_key),
     db: Session = Depends(get_db)
 ):
     from app.models.tenant import Tenant
 
+    # Verifica se número já existe
     if db.query(Tenant).filter(Tenant.whatsapp_number == whatsapp_number).first():
-        raise HTTPException(400, "Número de WhatsApp já cadastrado")
+        raise HTTPException(400, "❌ Este número de WhatsApp já está cadastrado")
 
     new_tenant = Tenant(
         id=f"clinica_{name.lower().replace(' ', '_').replace('ã','a').replace('ç','c')}",
@@ -113,7 +114,7 @@ def create_tenant(
         whatsapp_number=whatsapp_number,
         plan=plan,
         is_active=True,
-        attendant_phone=None
+        human_mode_active=False
     )
 
     db.add(new_tenant)
@@ -122,7 +123,7 @@ def create_tenant(
 
     return {
         "status": "success",
-        "message": f"Clínica '{name}' criada com sucesso!",
+        "message": f"✅ Clínica '{name}' criada com sucesso!",
         "tenant_id": new_tenant.id,
         "whatsapp_number": new_tenant.whatsapp_number,
         "plan": new_tenant.plan
