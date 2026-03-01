@@ -48,7 +48,7 @@ async def twilio_webhook(request: Request, db: Session = Depends(get_db)):
 
         # Mensagem do paciente
         print("💬 Processando mensagem do paciente...")
-        process_incoming_message(from_number, body, to_number, db)
+        process_incoming_message(from_number, body, to_number)
         print("✅ Resposta enviada com sucesso!")
 
         return {"status": "processed"}
