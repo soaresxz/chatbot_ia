@@ -8,10 +8,10 @@ from app.api.v1.dashboard import router as dashboard_router
 from app.api.v1.send_message import router as send_router
 from app.api.v1.human_send import router as human_send_router
 from app.core.websocket_manager import active_connections
-from sqlalchemy.orm import Session, Query, HTTPException
+from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.models.tenant import Tenant
-from fastapi import Depends    
+from fastapi import Depends, HTTPException, Query
 
 
 ADMIN_API_KEY = "senhaadminteste"  # ← mude isso e coloque no Railway como variável
