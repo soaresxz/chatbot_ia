@@ -7,13 +7,20 @@ import os
 
 class GoogleSheetReader:
     def __init__(self):
-        import json  # adicione esta linha no topo do arquivo também
+        import json
+        import base64
+        import os
+        from google.oauth2.service_account import Credentials
 
-        creds_json = os.getenv("GOOGLE_CREDENTIALS")
-        if not creds_json:
-            raise ValueError("❌ GOOGLE_CREDENTIALS não foi configurada no Railway!")
+        creds_base64 = os.getenv("GOOGLE_CREDENTIALS_BASE64")
+        if not creds_base64:
+            raise ValueError("❌ GOOGLE_CREDENTIALS_BASE64 não foi configurada no Railway!")
 
+        # Decodifica o base64 de volta para JSON
+        creds_json = base64.b64decode(creds_base64).decode("utf-8")
+        
         creds_dict = json.loads(creds_json)
+        
         scopes = ["https://www.googleapis.com/auth/spreadsheets"]
         
         creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
