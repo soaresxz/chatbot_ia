@@ -9,7 +9,6 @@ from app.services.whatsapp.twilio_provider import TwilioProvider
 from app.services.intent_matcher import get_quick_response
 from app.services.basic_bot import handle_basic_plan
 from app.services.ai.gemini_agent import get_ai_response
-from app.services.sheet_reader import sheet_reader
 from app.core.websocket_manager import broadcast
 import logging
 import traceback
@@ -38,15 +37,11 @@ async def process_incoming_message(from_number: str, body: str, to_number: str):
 
         if status and status.human_mode_until and datetime.utcnow() < status.human_mode_until:
             print(f"👩‍💼 MODO HUMANO ATIVO para {from_number}")
-            # salva log e retorna
-            log_in = MessageLog(...)
-            db.add(log_in)
-            db.commit()
             return
 
         print(f"🤖 Processando mensagem normal do paciente {from_number}")
 
-        # Salva mensagem de entrada
+        # Salva log entrada
         log_in = MessageLog(
             id=str(uuid.uuid4()),
             tenant_id=tenant.id,
@@ -59,7 +54,7 @@ async def process_incoming_message(from_number: str, body: str, to_number: str):
         db.add(log_in)
         db.commit()
 
-        await broadcast({...})  # seu broadcast
+        await broadcast({"type": "new_message", "from": "paciente", "message": body, "is_bot": False})
 
         # Gera resposta
         if tenant.plan == "basic":
@@ -68,24 +63,21 @@ async def process_incoming_message(from_number: str, body: str, to_number: str):
             quick = get_quick_response(body, tenant.name or "clínica")
             if quick:
                 response_text = quick
-            elif any(p in body.lower() for p in ["agendar", "marcar", "consulta", "horário"]):
-                response_text = "Entendi que quer agendar! Qual dia e horário você prefere?"
             else:
                 response_text = await get_ai_response(body, tenant, from_number) or FALLBACK_MESSAGE
 
-        # ================== ENVIO PARA TWILIO COM DEBUG PESADO ==================
-        print(f"📤 ENVIANDO PARA TWILIO → Para: {from_number} | Mensagem: {response_text[:100]}...")
+        # ================== ENVIO TWILIO COM DEBUG PESADO ==================
+        print(f"📤 ENVIANDO PARA TWILIO → Para: {from_number} | Mensagem: {response_text[:120]}...")
 
         provider = TwilioProvider()
         try:
             message_sid = await provider.send_message(from_number, response_text or FALLBACK_MESSAGE)
-            print(f"✅ TWILIO ACEITOU A MENSAGEM! SID: {message_sid}")
+            print(f"✅ TWILIO ACEITOU! SID: {message_sid}")
         except Exception as send_error:
-            print(f"❌ FALHA NO ENVIO TWILIO: {send_error}")
+            print(f"❌ FALHA NO TWILIO: {send_error}")
             traceback.print_exc()
-            response_text = FALLBACK_MESSAGE  # fallback
 
-        # Log de saída
+        # Log saída
         log_out = MessageLog(
             id=str(uuid.uuid4()),
             tenant_id=tenant.id,
@@ -98,12 +90,12 @@ async def process_incoming_message(from_number: str, body: str, to_number: str):
         db.add(log_out)
         db.commit()
 
-        await broadcast({...})
+        await broadcast({"type": "new_message", "from": "bot", "message": response_text, "is_bot": True})
 
         print(f"✅ Processo finalizado - Resposta: {response_text[:150]}...")
 
     except Exception as e:
-        print(f"❌ ERRO GERAL NO PROCESS_INCOMING_MESSAGE: {e}")
+        print(f"❌ ERRO GERAL: {e}")
         traceback.print_exc()
     finally:
         db.close()
