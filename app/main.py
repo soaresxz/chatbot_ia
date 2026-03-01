@@ -1,6 +1,5 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-
 from app.core.database import SessionLocal, create_tables
 from app.api.v1.webhook import router as webhook_router
 from app.api.v1.dashboard import router as dashboard_router
@@ -77,18 +76,9 @@ async def websocket_endpoint(websocket: WebSocket):
 # ==================== STARTUP ====================
 @app.on_event("startup")
 async def startup_event():
-    create_tables()
+    await create_tables()               # ← agora faz tudo automático
+    print("🚀 Chatbot iniciado com PostgreSQL + reset de modo humano!")
     
-    db = SessionLocal()
-    tenants = db.query(Tenant).all()
-    for tenant in tenants:
-        tenant.human_mode_active = False
-        tenant.human_mode_until = None
-    db.commit()
-    db.close()
-    
-    print("✅ Sistema iniciado - Modo humano resetado para todos os tenants")
-    print("✅ OdontoIA SaaS rodando normalmente!")
 
 # Root
 @app.get("/")
