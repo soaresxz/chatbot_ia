@@ -17,44 +17,27 @@ async def twilio_webhook(request: Request, db: Session = Depends(get_db)):
         to_number   = form.get("To", "").strip()
         body        = form.get("Body", "").strip()
 
-        print(f"\n📨 [WEBHOOK] Recebido → From: {from_number} | To: {to_number} | Msg: '{body}'")
-
         # Normalização do número
-        def normalize(n):
+        def normalize(n: str) -> str:
             return ''.join(filter(str.isdigit, n.replace("whatsapp:", "").replace("+", "")))
-
-        to_clean = normalize(to_number)
 
         # Busca tenant
         tenant = db.query(Tenant).filter(
-            Tenant.whatsapp_number.ilike(f"%{to_clean}%")
+            Tenant.whatsapp_number.ilike(f"%{normalize(to_number)}%")
         ).first()
 
-        print("📋 Tenants cadastrados:")
-        for t in db.query(Tenant).all():
-            print(f"   → ID: {t.id} | WhatsApp: {t.whatsapp_number}")
-
         if not tenant:
-            print(f"❌ Nenhum tenant encontrado para {to_clean}")
             return {"status": "ignored"}
 
-        print(f"✅ Tenant encontrado: {tenant.id} - {getattr(tenant, 'name', 'Sem nome')}")
-
-        # Modo humano (atendente)
+        # Mensagem da atendente → modo humano
         if normalize(from_number) == normalize(tenant.whatsapp_number):
-            print("👤 Mensagem da atendente → Modo humano")
             handle_attendant_message(tenant, to_number)
             return {"status": "human_takeover"}
 
         # Mensagem do paciente
-        print("💬 Processando mensagem do paciente...")
-        await process_incoming_message(from_number, body, to_number)   # ← AQUI ESTAVA O ERRO (faltava await)
-        print("✅ Processamento concluído com sucesso!")
-
+        await process_incoming_message(from_number, body, to_number)
         return {"status": "processed"}
 
     except Exception as e:
-        print(f"❌ ERRO CRÍTICO NO WEBHOOK: {e}")
-        import traceback
-        traceback.print_exc()
+        print(f"❌ Erro no webhook: {e}")
         return {"status": "error"}
