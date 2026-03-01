@@ -11,9 +11,7 @@ from app.core.websocket_manager import active_connections
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.models.tenant import Tenant
-from app.services.ai.gemini_agent import get_ai_response
-from app.services.whatsapp.service import process_incoming_message
-from app.services.whatsapp.human_handler import handle_attendant_message
+from fastapi import Depends              # ← adicione esta linha
 
 
 
