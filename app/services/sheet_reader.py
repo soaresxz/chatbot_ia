@@ -14,13 +14,15 @@ class GoogleSheetReader:
 
         creds_base64 = os.getenv("GOOGLE_CREDENTIALS_BASE64")
         if not creds_base64:
-            raise ValueError("❌ GOOGLE_CREDENTIALS_BASE64 não foi configurada no Railway!")
+            raise ValueError("❌ GOOGLE_CREDENTIALS_BASE64 não configurada no Railway!")
 
-        # Decodifica o base64 de volta para JSON
-        creds_json = base64.b64decode(creds_base64).decode("utf-8")
-        
-        creds_dict = json.loads(creds_json)
-        
+        try:
+            # Decodifica base64 de volta para o JSON original exato
+            creds_json = base64.b64decode(creds_base64).decode("utf-8")
+            creds_dict = json.loads(creds_json)
+        except Exception as e:
+            raise ValueError(f"❌ Erro ao decodificar base64: {e}")
+
         scopes = ["https://www.googleapis.com/auth/spreadsheets"]
         
         creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
