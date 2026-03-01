@@ -3,7 +3,7 @@ from __future__ import annotations  # ← ESSA LINHA RESOLVE 90% dos erros de ID
 import os
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.ext.asyncio import async_sessionmaker
 from sqlalchemy.orm import declarative_base
 from sqlalchemy import update
 from app.core.config import settings
