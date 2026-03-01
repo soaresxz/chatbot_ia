@@ -7,14 +7,16 @@ import os
 
 class GoogleSheetReader:
     def __init__(self):
-        # Caminho da chave JSON (coloque o arquivo na raiz do projeto)
-        self.credentials_file = "chat-bot-planilha-d4d94f5813b3.json"
-        
-        if not os.path.exists(self.credentials_file):
-            raise FileNotFoundError(f"❌ Arquivo {self.credentials_file} não encontrado!")
-        
+        import json  # adicione esta linha no topo do arquivo também
+
+        creds_json = os.getenv("GOOGLE_CREDENTIALS")
+        if not creds_json:
+            raise ValueError("❌ GOOGLE_CREDENTIALS não foi configurada no Railway!")
+
+        creds_dict = json.loads(creds_json)
         scopes = ["https://www.googleapis.com/auth/spreadsheets"]
-        creds = Credentials.from_service_account_file(self.credentials_file, scopes=scopes)
+        
+        creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
         
         self.client = gspread.authorize(creds)
         self.spreadsheet = self.client.open_by_key("185tXR5NF23pzRxhXOuwUz10Mwh96Hp0MRA1JximaixA")
