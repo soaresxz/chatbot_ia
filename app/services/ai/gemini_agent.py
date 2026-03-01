@@ -25,6 +25,18 @@ async def get_services_list(tenant_id: str) -> str:
         lines.append(f"- {s.name}: a partir de R$ {float(s.price_from):,.2f}".replace(",", "."))
     return "\n".join(lines)
 
+
+async def get_ai_response(message: str, tenant, from_number: str, available_slots: list = None):
+    """Resposta da IA com contexto real da agenda"""
+    
+    slots_text = "Nenhum horário disponível encontrado."
+    if available_slots:
+        slots_text = "\n".join([
+            f"• {slot['date']} às {slot['time']} com {slot['dentist']}" 
+            for slot in available_slots[:5]  # mostra só os 5 primeiros
+        ])
+
+
 async def get_ai_response(message: str, tenant, phone: str) -> str:
     if phone not in conversation_history:
         conversation_history[phone] = []
