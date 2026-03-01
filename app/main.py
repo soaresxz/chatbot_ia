@@ -1,25 +1,23 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from app.core.database import get_db, create_tables
+from starlette.middleware.base import BaseHTTPMiddleware
+
+# ================== IMPORTS DO PROJETO ==================
+from app.core.database import create_tables
 from app.api.v1.webhook import router as webhook_router
 from app.api.v1.dashboard import router as dashboard_router
 from app.api.v1.send_message import router as send_router
 from app.api.v1.human_send import router as human_send_router
-from starlette.middleware.base import BaseHTTPMiddleware
-from app.core.websocket_manager import active_connections, broadcast
+from app.core.websocket_manager import active_connections
 
-# Import do Tenant para o startup
-from app.models.tenant import Tenant
-
-# Sistema de conexões WebSocket (para Lovable)
-
+# ================== APP FASTAPI ==================
 app = FastAPI(
     title="OdontoIA SaaS",
     description="Agente IA WhatsApp para Clínicas Odontológicas",
     version="1.0"
 )
 
-# CORS - essencial para Lovable funcionar
+# ================== CORS (essencial para Lovable) ==================
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -28,10 +26,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-# ================== LOGGER GLOBAL DE DEBUG (para Lovable) ==================
-
-
+# ================== MIDDLEWARE DE DEBUG (para você ver tudo no Railway) ==================
 class DebugRequestMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
         print(f"\n🔍 [REQUEST] {request.method} {request.url.path} | IP: {request.client.host if request.client else 'unknown'}")
@@ -49,14 +44,14 @@ class DebugRequestMiddleware(BaseHTTPMiddleware):
         return response
 
 app.add_middleware(DebugRequestMiddleware)
-# =========================================================================
-# Rotas
+
+# ================== ROTAS ==================
 app.include_router(webhook_router, prefix="/api/v1")
 app.include_router(dashboard_router, prefix="/dashboard")
 app.include_router(send_router, prefix="/api")
 app.include_router(human_send_router, prefix="/api")
 
-# ==================== WEBSOCKET PARA LOVABLE ====================
+# ================== WEBSOCKET PARA LOVABLE ==================
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
@@ -73,14 +68,13 @@ async def websocket_endpoint(websocket: WebSocket):
         print(f"Erro no WebSocket: {e}")
         active_connections.discard(websocket)
 
-# ==================== STARTUP ====================
+# ================== STARTUP (SÍNCRONO - compatível com database.py atual) ==================
 @app.on_event("startup")
-async def startup_event():
-    await create_tables()               # ← agora faz tudo automático
-    print("🚀 Chatbot iniciado com PostgreSQL + reset de modo humano!")
-    
+def startup_event():
+    create_tables()                      # ← síncrono (sem await)
+    print("🚀 Chatbot iniciado com PostgreSQL (síncrono)!")
 
-# Root
+# ================== ROOT ==================
 @app.get("/")
 async def root():
     return {
