@@ -8,10 +8,18 @@ from app.api.v1.dashboard import router as dashboard_router
 from app.api.v1.send_message import router as send_router
 from app.api.v1.human_send import router as human_send_router
 from app.core.websocket_manager import active_connections
-from sqlalchemy.orm import Session, Query
+from sqlalchemy.orm import Session, Query, HTTPException
 from app.core.database import get_db
 from app.models.tenant import Tenant
-from fastapi import Depends              # ← adicione esta linha
+from fastapi import Depends    
+
+
+ADMIN_API_KEY = "senhaadminteste"  # ← mude isso e coloque no Railway como variável
+
+def verify_admin_key(x_api_key: str = Query(None, alias="api_key")):
+    if x_api_key != ADMIN_API_KEY:
+        raise HTTPException(status_code=403, detail="Chave de admin inválida")
+    return True# ← adicione esta linha
 
 
 
@@ -84,31 +92,28 @@ def set_premium(db: Session = Depends(get_db)):
         "plan": tenant.plan
     }
     
-@app.get("/admin/create-tenant")
+@app.post("/admin/tenants")
 def create_tenant(
-    name: str = Query(..., description="Nome da clínica"),
-    dentist_name: str = Query(..., description="Nome do dentista principal"),
-    whatsapp_number: str = Query(..., description="Número WhatsApp completo (ex: +5511999999999)"),
-    plan: str = Query("basic", description="basic ou premium"),
+    name: str,
+    dentist_name: str,
+    whatsapp_number: str,
+    plan: str = "basic",
+    api_key: bool = Depends(verify_admin_key),
     db: Session = Depends(get_db)
 ):
     from app.models.tenant import Tenant
 
-    # Verifica se o número já existe
-    existing = db.query(Tenant).filter(Tenant.whatsapp_number == whatsapp_number).first()
-    if existing:
-        return {"status": "error", "message": "❌ Este número de WhatsApp já está cadastrado"}
+    if db.query(Tenant).filter(Tenant.whatsapp_number == whatsapp_number).first():
+        raise HTTPException(400, "Número de WhatsApp já cadastrado")
 
-    # Cria o tenant
     new_tenant = Tenant(
-        id=f"clinica_{name.lower().replace(' ', '_').replace('ã', 'a').replace('ç', 'c')}",
+        id=f"clinica_{name.lower().replace(' ', '_').replace('ã','a').replace('ç','c')}",
         name=name,
         dentist_name=dentist_name,
         whatsapp_number=whatsapp_number,
         plan=plan,
         is_active=True,
-        human_mode_active=False,
-        attendant_phone=""  # pode editar depois
+        attendant_phone=None
     )
 
     db.add(new_tenant)
@@ -117,12 +122,30 @@ def create_tenant(
 
     return {
         "status": "success",
-        "message": f"✅ Clínica '{name}' criada com sucesso!",
+        "message": f"Clínica '{name}' criada com sucesso!",
         "tenant_id": new_tenant.id,
         "whatsapp_number": new_tenant.whatsapp_number,
         "plan": new_tenant.plan
     }
 
+# Listar todas as clínicas
+@app.get("/admin/tenants")
+def list_tenants(api_key: bool = Depends(verify_admin_key), db: Session = Depends(get_db)):
+    from app.models.tenant import Tenant
+    tenants = db.query(Tenant).all()
+    return {
+        "total": len(tenants),
+        "clinicas": [
+            {
+                "id": t.id,
+                "nome": t.name,
+                "dentista": t.dentist_name,
+                "whatsapp": t.whatsapp_number,
+                "plano": t.plan,
+                "ativo": t.is_active
+            } for t in tenants
+        ]
+    }
 # Root
 @app.get("/")
 async def root():
