@@ -1,4 +1,4 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends, Query, HTTPException
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends, Query, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 import asyncio
@@ -235,35 +235,68 @@ def create_patient(tenant_id: str, data: CreatePatient, db=Depends(get_db)):
 
 # ================== ASSUME / RELEASE ==================
 @app.post("/api/v1/conversations/assume")
-def assume_conversation(
-    tenant_id: str = Query(...),
-    api_key: str = Query(None, alias="api_key"),
-    db=Depends(get_db)
-):
+async def assume_conversation(request: Request, tenant_id: str = Query(...), api_key: str = Query(None, alias="api_key"), db=Depends(get_db)):
     if api_key != ADMIN_API_KEY:
         raise HTTPException(403, "Chave inválida")
-    from app.models.tenant import Tenant
-    tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
-    if not tenant:
-        raise HTTPException(404, "Clínica não encontrada")
-    tenant.human_mode_active = True
+
+    body = {}
+    try:
+        body = await request.json()
+    except Exception:
+        pass
+
+    patient_phone = body.get("patient_phone") or body.get("patientPhone")
+    if not patient_phone:
+        raise HTTPException(422, "patient_phone é obrigatório")
+
+    from app.models.conversation_status import ConversationStatus
+    status = db.query(ConversationStatus).filter(
+        ConversationStatus.tenant_id == tenant_id,
+        ConversationStatus.patient_phone == patient_phone
+    ).first()
+
+    if status:
+        status.human_mode_active = True
+        status.human_mode_until = None
+    else:
+        status = ConversationStatus(
+            tenant_id=tenant_id,
+            patient_phone=patient_phone,
+            human_mode_active=True,
+            human_mode_until=None
+        )
+        db.add(status)
+
     db.commit()
     return {"status": "success", "mode": "human_mode"}
 
+
 @app.post("/api/v1/conversations/release")
-def release_conversation(
-    tenant_id: str = Query(...),
-    api_key: str = Query(None, alias="api_key"),
-    db=Depends(get_db)
-):
+async def release_conversation(request: Request, tenant_id: str = Query(...), api_key: str = Query(None, alias="api_key"), db=Depends(get_db)):
     if api_key != ADMIN_API_KEY:
         raise HTTPException(403, "Chave inválida")
-    from app.models.tenant import Tenant
-    tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
-    if not tenant:
-        raise HTTPException(404, "Clínica não encontrada")
-    tenant.human_mode_active = False
-    db.commit()
+
+    body = {}
+    try:
+        body = await request.json()
+    except Exception:
+        pass
+
+    patient_phone = body.get("patient_phone") or body.get("patientPhone")
+    if not patient_phone:
+        raise HTTPException(422, "patient_phone é obrigatório")
+
+    from app.models.conversation_status import ConversationStatus
+    status = db.query(ConversationStatus).filter(
+        ConversationStatus.tenant_id == tenant_id,
+        ConversationStatus.patient_phone == patient_phone
+    ).first()
+
+    if status:
+        status.human_mode_active = False
+        status.human_mode_until = None
+        db.commit()
+
     return {"status": "success", "mode": "ai_mode"}
 
 # ================== ROOT ==================
