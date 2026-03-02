@@ -229,6 +229,38 @@ def get_dashboard_conversations(db=Depends(get_db)):
         } for m in messages]
     }
 
+@app.get("/api/v1/conversations")
+def get_conversations(
+    tenant_id: str = Query(None),
+    api_key: str = Query(None, alias="api_key"),
+    db=Depends(get_db)
+):
+    if api_key != "senhaadminteste":
+        raise HTTPException(403, "Chave inválida")
+    
+    if not tenant_id:
+        tenant_id = "clinica_odonto_sorriso"
+    
+    from app.models.message_log import MessageLog
+    
+    messages = db.query(MessageLog)\
+        .filter(MessageLog.tenant_id == tenant_id)\
+        .order_by(MessageLog.created_at.desc())\
+        .limit(50).all()
+    
+    return {
+        "conversas": [
+            {
+                "id": str(m.id),
+                "mensagem": m.message,
+                "de": "paciente" if getattr(m, 'from_user', True) else "bot",
+                "data": m.created_at.strftime("%d/%m %H:%M"),
+                "telefone": getattr(m, 'from_phone', '+14155238886'),
+                "nao_lidas": 0
+            } for m in messages
+        ]
+    }
+
 # Root
 @app.get("/")
 async def root():
