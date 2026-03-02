@@ -117,6 +117,16 @@ async def websocket_endpoint(websocket: WebSocket):
 def startup_event():
     create_tables()
     print("🚀 OdontoIA SaaS iniciado com sucesso!")
+    
+@app.get("/dashboard/clinica/{tenant_id}")
+async def get_clinica_dashboard(tenant_id: str, db=Depends(get_db)):
+    from app.services.dashboard_service import DashboardService
+    try:
+        metrics = await DashboardService.get_clinica_dashboard(db, tenant_id)
+        return {"metrics": metrics, "tenant_id": tenant_id}
+    except Exception as e:
+        print(f"❌ ERRO DASHBOARD: {str(e)}")
+        return {"error": str(e)}
 
 # Root
 @app.get("/")
