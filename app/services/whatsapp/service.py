@@ -25,17 +25,21 @@ async def process_incoming_message(from_number: str, body: str, to_number: str):
             print(f"⚠️ Nenhum tenant encontrado para o número: {to_number}")
             return
 
-        # Verifica modo humano
+        # ✅ FIX 2: para o bot se human_mode_active=True, independente de human_mode_until
         status = db.query(ConversationStatus).filter(
             ConversationStatus.tenant_id == tenant.id,
             ConversationStatus.patient_phone == from_number,
             ConversationStatus.human_mode_active == True
         ).first()
 
-        if status and status.human_mode_until and datetime.utcnow() < status.human_mode_until:
-            return  # não responde
+        if status:
+            # Se tem prazo, verifica se ainda está dentro do prazo
+            if status.human_mode_until is None or datetime.utcnow() < status.human_mode_until:
+                print(f"🙋 Modo humano ativo para {from_number}, bot pausado.")
+                return
 
-        # Salva mensagem de entrada
+        # ✅ FIX 1: salva o timestamp antes do commit para evitar KeyError após expiração
+        now_in = datetime.utcnow()
         log_in = MessageLog(
             id=str(uuid.uuid4()),
             tenant_id=tenant.id,
@@ -43,12 +47,11 @@ async def process_incoming_message(from_number: str, body: str, to_number: str):
             to_phone=to_number,
             message=body,
             direction="in",
-            created_at=datetime.utcnow()
+            created_at=now_in
         )
         db.add(log_in)
         db.commit()
 
-        # ✅ Broadcast com tenant_id e patient_phone para o frontend atualizar em tempo real
         await broadcast({
             "type": "new_message",
             "tenant_id": tenant.id,
@@ -57,7 +60,7 @@ async def process_incoming_message(from_number: str, body: str, to_number: str):
                 "id": log_in.id,
                 "content": body,
                 "direction": "in",
-                "timestamp": log_in.created_at.isoformat(),
+                "timestamp": now_in.isoformat(),
                 "sender_name": None,
             }
         })
@@ -73,7 +76,8 @@ async def process_incoming_message(from_number: str, body: str, to_number: str):
         provider = TwilioProvider()
         await provider.send_message(from_number, response_text)
 
-        # Log de saída
+        # ✅ FIX 1: mesmo padrão para log de saída
+        now_out = datetime.utcnow()
         log_out = MessageLog(
             id=str(uuid.uuid4()),
             tenant_id=tenant.id,
@@ -81,12 +85,11 @@ async def process_incoming_message(from_number: str, body: str, to_number: str):
             to_phone=from_number,
             message=response_text,
             direction="out",
-            created_at=datetime.utcnow()
+            created_at=now_out
         )
         db.add(log_out)
         db.commit()
 
-        # ✅ Broadcast da resposta do bot
         await broadcast({
             "type": "new_message",
             "tenant_id": tenant.id,
@@ -95,7 +98,7 @@ async def process_incoming_message(from_number: str, body: str, to_number: str):
                 "id": log_out.id,
                 "content": response_text,
                 "direction": "out",
-                "timestamp": log_out.created_at.isoformat(),
+                "timestamp": now_out.isoformat(),
                 "sender_name": "Bot",
             }
         })
