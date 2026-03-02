@@ -13,6 +13,7 @@ from app.api.v1.reports import router as reports_router
 from app.core.websocket_manager import active_connections
 from app.core.tenant import TenantMiddleware
 from app.core.database import get_db
+from pydantic import BaseModel
 
 app = FastAPI(
     title="OdontoIA SaaS",
@@ -168,21 +169,9 @@ def get_clinica_report(tenant_id: str, db=Depends(get_db)):
     }
 
 # ================== PACIENTES (para demo do vídeo) ==================
-@app.get("/clinica/{tenant_id}/pacientes")
-def list_patients(tenant_id: str, db=Depends(get_db)):
-    from app.models.patient import Patient
-    patients = db.query(Patient).filter(Patient.tenant_id == tenant_id).all()
-    return {
-        "total": len(patients),
-        "pacientes": [{
-            "id": p.id,
-            "nome": p.name,
-            "telefone": p.phone,
-            "email": p.email,
-            "aniversario": p.birth_date.strftime("%d/%m/%Y") if p.birth_date else None,
-            "observacoes": p.notes
-        } for p in patients]
-    }
+class CreatePatient(BaseModel):
+    nome: str
+    telefone: str
 
 @app.get("/clinica/{tenant_id}/pacientes")
 def list_patients(tenant_id: str, db=Depends(get_db)):
@@ -199,12 +188,12 @@ def list_patients(tenant_id: str, db=Depends(get_db)):
     }
 
 @app.post("/clinica/{tenant_id}/pacientes")
-def create_patient(tenant_id: str, data: dict, db=Depends(get_db)):
+def create_patient(tenant_id: str, data: CreatePatient, db=Depends(get_db)):
     from app.models.patient import Patient
     new_patient = Patient(
         tenant_id=tenant_id,
-        name=data.get("nome"),
-        phone=data.get("telefone")
+        name=data.nome,
+        phone=data.telefone
     )
     db.add(new_patient)
     db.commit()
