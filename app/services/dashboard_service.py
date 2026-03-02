@@ -29,7 +29,7 @@ class DashboardService:
             )
         ) or 0
 
-        # Faltas (usando CANCELLED por enquanto - NO_SHOW ainda não existe no banco)
+        # Faltas (usando CANCELLED por enquanto)
         faltas = db.scalar(
             select(func.count()).where(
                 and_(
@@ -40,15 +40,8 @@ class DashboardService:
             )
         ) or 0
 
-        # Faturamento projetado
-        faturamento = db.scalar(
-            select(func.sum(Appointment.value)).where(
-                and_(
-                    Appointment.tenant_id == tenant_id,
-                    func.date(Appointment.scheduled_date) == hoje
-                )
-            )
-        ) or 0.0
+        # Faturamento = 0 por enquanto (coluna value ainda não existe no banco)
+        faturamento = 0.0
 
         taxa_confirmacao = round((confirmados / total_hoje * 100), 1) if total_hoje > 0 else 0.0
 
