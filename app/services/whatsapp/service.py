@@ -22,6 +22,7 @@ async def process_incoming_message(from_number: str, body: str, to_number: str):
         ).first()
 
         if not tenant:
+            print(f"⚠️ Nenhum tenant encontrado para o número: {to_number}")
             return
 
         # Verifica modo humano
@@ -47,11 +48,18 @@ async def process_incoming_message(from_number: str, body: str, to_number: str):
         db.add(log_in)
         db.commit()
 
+        # ✅ Broadcast com tenant_id e patient_phone para o frontend atualizar em tempo real
         await broadcast({
             "type": "new_message",
-            "from": "paciente",
-            "message": body,
-            "is_bot": False
+            "tenant_id": tenant.id,
+            "patient_phone": from_number,
+            "message": {
+                "id": log_in.id,
+                "content": body,
+                "direction": "in",
+                "timestamp": log_in.created_at.isoformat(),
+                "sender_name": None,
+            }
         })
 
         # Gera resposta conforme plano
@@ -78,11 +86,18 @@ async def process_incoming_message(from_number: str, body: str, to_number: str):
         db.add(log_out)
         db.commit()
 
+        # ✅ Broadcast da resposta do bot
         await broadcast({
             "type": "new_message",
-            "from": "bot",
-            "message": response_text,
-            "is_bot": True
+            "tenant_id": tenant.id,
+            "patient_phone": from_number,
+            "message": {
+                "id": log_out.id,
+                "content": response_text,
+                "direction": "out",
+                "timestamp": log_out.created_at.isoformat(),
+                "sender_name": "Bot",
+            }
         })
 
         print(f"✅ Resposta enviada para {from_number}")
