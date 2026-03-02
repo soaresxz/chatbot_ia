@@ -8,48 +8,47 @@ class DashboardService:
     async def get_clinica_dashboard(db: AsyncSession, tenant_id: str):
         hoje = datetime.utcnow().date()
 
-        # === CÁLCULOS REAIS DO BANCO (sem números fictícios) ===
-        total_hoje = await db.scalar(
-            select(func.count())
-            .where(
-                and_(
-                    Appointment.tenant_id == tenant_id,
-                    func.date(Appointment.scheduled_date) == hoje
-                )
+        # Total de agendamentos hoje
+        stmt = select(func.count()).where(
+            and_(
+                Appointment.tenant_id == tenant_id,
+                func.date(Appointment.scheduled_date) == hoje
             )
-        ) or 0
+        )
+        result = await db.execute(stmt)
+        total_hoje = result.scalar() or 0
 
-        confirmados = await db.scalar(
-            select(func.count())
-            .where(
-                and_(
-                    Appointment.tenant_id == tenant_id,
-                    func.date(Appointment.scheduled_date) == hoje,
-                    Appointment.status == AppointmentStatus.CONFIRMED
-                )
+        # Confirmados
+        stmt = select(func.count()).where(
+            and_(
+                Appointment.tenant_id == tenant_id,
+                func.date(Appointment.scheduled_date) == hoje,
+                Appointment.status == AppointmentStatus.CONFIRMED
             )
-        ) or 0
+        )
+        result = await db.execute(stmt)
+        confirmados = result.scalar() or 0
 
-        faltas = await db.scalar(
-            select(func.count())
-            .where(
-                and_(
-                    Appointment.tenant_id == tenant_id,
-                    func.date(Appointment.scheduled_date) == hoje,
-                    Appointment.status == AppointmentStatus.NO_SHOW
-                )
+        # Faltas (no_show)
+        stmt = select(func.count()).where(
+            and_(
+                Appointment.tenant_id == tenant_id,
+                func.date(Appointment.scheduled_date) == hoje,
+                Appointment.status == AppointmentStatus.NO_SHOW
             )
-        ) or 0
+        )
+        result = await db.execute(stmt)
+        faltas = result.scalar() or 0
 
-        faturamento = await db.scalar(
-            select(func.sum(Appointment.value))
-            .where(
-                and_(
-                    Appointment.tenant_id == tenant_id,
-                    func.date(Appointment.scheduled_date) == hoje
-                )
+        # Faturamento projetado
+        stmt = select(func.sum(Appointment.value)).where(
+            and_(
+                Appointment.tenant_id == tenant_id,
+                func.date(Appointment.scheduled_date) == hoje
             )
-        ) or 0.0
+        )
+        result = await db.execute(stmt)
+        faturamento = result.scalar() or 0.0
 
         taxa_confirmacao = round((confirmados / total_hoje * 100), 1) if total_hoje > 0 else 0.0
 
@@ -59,6 +58,6 @@ class DashboardService:
             "taxa_confirmacao": float(taxa_confirmacao),
             "faltas": int(faltas),
             "faturamento_projetado": round(float(faturamento), 2),
-            "proximos_agendamentos": 0,      # vamos expandir na próxima etapa
+            "proximos_agendamentos": 0,
             "mensagens_hoje": 0
         }
