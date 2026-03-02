@@ -14,6 +14,7 @@ from app.core.database import get_db
 from app.api.v1.conversations import router as conversations_router
 from app.api.v1.conversations import router as conversations_router
 from app.api.v1.reports import router as reports_router
+from app.api.v1.routers.dashboard import router as dashboard_router
 
 app = FastAPI(
     title="OdontoIA SaaS",
@@ -112,6 +113,7 @@ app.include_router(dashboard_router, prefix="/dashboard")
 app.include_router(send_router, prefix="/api")
 app.include_router(human_send_router, prefix="/api")
 app.include_router(conversations_router, prefix="/api/v1")
+app.include_router(dashboard_router, prefix="/api/v1")
 app.include_router(conversations_router)
 app.include_router(reports_router)
 

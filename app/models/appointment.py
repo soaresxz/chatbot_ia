@@ -1,14 +1,16 @@
-from sqlalchemy import Column, String, DateTime, ForeignKey, Enum as SQLEnum
+from sqlalchemy import Column, String, DateTime, ForeignKey, Enum as SQLEnum, Float, Index
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import enum
+import uuid
 from app.core.database import Base
 
 class AppointmentStatus(str, enum.Enum):
-    PENDING = "pending"      # aguardando confirmação
-    CONFIRMED = "confirmed"  # confirmado
+    PENDING = "pending"
+    CONFIRMED = "confirmed"
     CANCELLED = "cancelled"
     COMPLETED = "completed"
+    NO_SHOW = "no_show"          # novo: faltou
 
 class Appointment(Base):
     __tablename__ = "appointments"
@@ -18,14 +20,20 @@ class Appointment(Base):
     
     patient_name = Column(String, nullable=False)
     patient_phone = Column(String, nullable=False)
-    dentist_name = Column(String, nullable=True)      # ex: "Dr. João"
-    procedure = Column(String, nullable=True)         # ex: "Avaliação", "Limpeza", "Aparelho"
+    dentist_name = Column(String, nullable=True)
+    procedure = Column(String, nullable=True)
+    value = Column(Float, default=0.0)                    # ← novo: valor da consulta
     
-    scheduled_date = Column(DateTime, nullable=False)  # data e hora exata
+    scheduled_date = Column(DateTime, nullable=False)
     status = Column(SQLEnum(AppointmentStatus), default=AppointmentStatus.PENDING)
     
     created_at = Column(DateTime, default=datetime.utcnow)
     confirmed_at = Column(DateTime, nullable=True)
 
-    # Relacionamento com Tenant
     tenant = relationship("Tenant", back_populates="appointments")
+
+    # Índices para performance em produção
+    __table_args__ = (
+        Index("ix_appointment_tenant_date", "tenant_id", "scheduled_date"),
+        Index("ix_appointment_status", "status"),
+    )
