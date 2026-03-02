@@ -101,6 +101,7 @@ app.include_router(conversations_router, prefix="/api/v1")
 app.include_router(dashboard_router)           # ← sem prefixo extra (já vem com /dashboard no router)
 app.include_router(reports_router)
 
+
 # WebSocket
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
@@ -127,44 +128,6 @@ async def get_clinica_dashboard(tenant_id: str, db=Depends(get_db)):
     except Exception as e:
         print(f"❌ ERRO DASHBOARD: {str(e)}")
         return {"error": str(e)}
-
-# === ROTA DE RELATÓRIOS DIRETA (para produção real) ===
-@app.get("/reports/clinica/{tenant_id}")
-def get_clinica_report(tenant_id: str, db=Depends(get_db)):
-    from sqlalchemy import select, func, and_
-    from datetime import datetime
-    from app.models.appointment import Appointment
-
-    hoje = datetime.utcnow().date()
-    inicio_mes = hoje.replace(day=1)
-
-    total_mes = db.scalar(
-        select(func.count()).where(
-            and_(
-                Appointment.tenant_id == tenant_id,
-                Appointment.scheduled_date >= inicio_mes
-            )
-        )
-    ) or 0
-
-    confirmados_mes = db.scalar(
-        select(func.count()).where(
-            and_(
-                Appointment.tenant_id == tenant_id,
-                Appointment.scheduled_date >= inicio_mes,
-                Appointment.status == "confirmed"
-            )
-        )
-    ) or 0
-
-    faturamento_mes = 0.0  # coluna value ainda não existe
-
-    return {
-        "periodo": inicio_mes.strftime("%B %Y"),
-        "total_agendamentos": total_mes,
-        "taxa_confirmacao": round((confirmados_mes / total_mes * 100), 1) if total_mes > 0 else 0.0,
-        "faturamento_mes": round(float(faturamento_mes), 2)
-    }
 
 # Root
 @app.get("/")

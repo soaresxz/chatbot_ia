@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
+from sqlalchemy import select, func, and_
+from datetime import datetime
 from app.core.database import get_db
-from datetime import datetime, timedelta
 from app.models.appointment import Appointment
-from app.models.tenant import Tenant
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 
@@ -31,20 +31,11 @@ def get_clinica_report(tenant_id: str, db: Session = Depends(get_db)):
         )
     ) or 0
 
-    faturamento_mes = db.scalar(
-        select(func.sum(Appointment.value)).where(
-            and_(
-                Appointment.tenant_id == tenant_id,
-                Appointment.scheduled_date >= inicio_mes
-            )
-        )
-    ) or 0.0
+    faturamento_mes = 0.0  # vamos ativar depois da migration
 
     return {
-        "periodo": f"{inicio_mes.strftime('%B %Y')}",
+        "periodo": inicio_mes.strftime("%B %Y"),
         "total_agendamentos": total_mes,
         "taxa_confirmacao": round((confirmados_mes / total_mes * 100), 1) if total_mes > 0 else 0.0,
-        "faturamento_mes": round(float(faturamento_mes), 2),
-        "grafico_diario": []  # vamos expandir depois
+        "faturamento_mes": round(float(faturamento_mes), 2)
     }
-    
