@@ -16,10 +16,10 @@ COMMON_INTENTS = {
     # Saudação
     "oi": "Olá! Bem-vindo(a) à {clinic_name} 🦷\n\nComo posso ajudar hoje?",
     "olá": "Olá! Bem-vindo(a) à {clinic_name} 🦷\n\nComo posso ajudar hoje?",
-    "bom dia": "Bom dia! Como posso ajudar hoje?",
-    "boa tarde": "Boa tarde! Como posso ajudar hoje?",
+    "bom dia": "Bom dia! Bem-vindo(a) à {clinic_name} 🦷\n\nComo posso ajudar hoje?",
+    "boa tarde": "Boa tarde! Bem-vindo(a) à {clinic_name} 🦷\n\nComo posso ajudar hoje?",
     "olá": "Olá! Bem-vindo(a) à {clinic_name} 🦷\n\nComo posso ajudar hoje?",
-    "boa noite": "Boa noite! Como posso ajudar hoje?",
+    "boa noite": "Boa noite! Bem-vindo(a) à {clinic_name} 🦷\n\nComo posso ajudar hoje?",
     "oii": "Olá! Bem-vindo(a) à {clinic_name} 🦷\n\nComo posso ajudar hoje?",
     "e aí": "Olá! Bem-vindo(a) à {clinic_name} 🦷\n\nComo posso ajudar hoje?",
     

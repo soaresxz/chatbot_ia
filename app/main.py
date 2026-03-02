@@ -205,6 +205,30 @@ def create_patient(tenant_id: str, data: CreatePatient, db=Depends(get_db)):
         "telefone": new_patient.phone
     }
 
+@app.get("/dashboard/conversations")
+def get_dashboard_conversations(db=Depends(get_db)):
+    tenant_id = "sandbox_twilio"   # ← sandbox que você está usando para teste
+    
+    from app.models.message_log import MessageLog   # ajuste se o nome do seu modelo for diferente
+    from datetime import datetime
+    
+    messages = db.query(MessageLog)\
+        .filter(MessageLog.tenant_id == tenant_id)\
+        .order_by(MessageLog.created_at.desc())\
+        .limit(30).all()
+    
+    return {
+        "conversas": [{
+            "id": str(m.id),
+            "paciente": "Cliente WhatsApp",
+            "telefone": m.from_phone or "+14155238886",
+            "mensagem": m.message,
+            "data": m.created_at.strftime("%d/%m %H:%M"),
+            "direcao": "recebida" if m.from_user else "enviada",
+            "nao_lidas": 0
+        } for m in messages]
+    }
+
 # Root
 @app.get("/")
 async def root():
