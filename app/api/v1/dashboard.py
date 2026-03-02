@@ -5,7 +5,7 @@ from app.core.database import get_db
 from app.models.tenant import Tenant
 from app.models.message_log import MessageLog
 from app.services.whatsapp.service import broadcast
-from app.core.websocket_manager import active_connections
+
 
 router = APIRouter()
 

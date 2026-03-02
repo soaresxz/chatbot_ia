@@ -17,6 +17,7 @@ class Tenant(Base):
     created_at = Column(DateTime, server_default=func.now())
     appointments = relationship("Appointment", back_populates="tenant", cascade="all, delete-orphan")
     attendant_phone = Column(String, nullable=True)  # número da atendente (ex: +557981171862)
+    patients = relationship("Patient", back_populates="tenant", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<Tenant {self.name}>"
