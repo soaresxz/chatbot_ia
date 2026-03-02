@@ -29,13 +29,13 @@ class DashboardService:
             )
         ) or 0
 
-        # Faltas (no_show)
+        # Faltas (usando CANCELLED por enquanto - NO_SHOW ainda não existe no banco)
         faltas = db.scalar(
             select(func.count()).where(
                 and_(
                     Appointment.tenant_id == tenant_id,
                     func.date(Appointment.scheduled_date) == hoje,
-                    Appointment.status == AppointmentStatus.NO_SHOW
+                    Appointment.status == AppointmentStatus.CANCELLED
                 )
             )
         ) or 0
