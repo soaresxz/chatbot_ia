@@ -18,8 +18,8 @@ class Appointment(Base):
     id = Column(String, primary_key=True, index=True, default=lambda: str(uuid.uuid4()))
     tenant_id = Column(String, ForeignKey("tenants.id"), nullable=False)
     
-    patient_name = Column(String, nullable=False)
-    patient_phone = Column(String, nullable=False)
+    patient_id = Column(String, ForeignKey("patients.id"), nullable=False)
+    patient = relationship("Patient", back_populates="appointments")
     dentist_name = Column(String, nullable=True)
     procedure = Column(String, nullable=True)
     value = Column(Float, default=0.0)                    # ← novo: valor da consulta

@@ -167,6 +167,39 @@ def get_clinica_report(tenant_id: str, db=Depends(get_db)):
         "faturamento_mes": round(float(faturamento_mes), 2)
     }
 
+# ================== PACIENTES (para demo do vídeo) ==================
+@app.get("/clinica/{tenant_id}/pacientes")
+def list_patients(tenant_id: str, db=Depends(get_db)):
+    from app.models.patient import Patient
+    patients = db.query(Patient).filter(Patient.tenant_id == tenant_id).all()
+    return {
+        "total": len(patients),
+        "pacientes": [{
+            "id": p.id,
+            "nome": p.name,
+            "telefone": p.phone,
+            "email": p.email,
+            "aniversario": p.birth_date.strftime("%d/%m/%Y") if p.birth_date else None,
+            "observacoes": p.notes
+        } for p in patients]
+    }
+
+@app.post("/clinica/{tenant_id}/pacientes")
+def create_patient(tenant_id: str, data: dict, db=Depends(get_db)):
+    from app.models.patient import Patient
+    new_patient = Patient(
+        tenant_id=tenant_id,
+        name=data.get("nome"),
+        phone=data.get("telefone"),
+        email=data.get("email"),
+        birth_date=data.get("aniversario"),
+        notes=data.get("observacoes")
+    )
+    db.add(new_patient)
+    db.commit()
+    db.refresh(new_patient)
+    return {"status": "success", "paciente_id": new_patient.id, "nome": new_patient.name}
+
 # Root
 @app.get("/")
 async def root():
