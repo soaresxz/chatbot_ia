@@ -5,16 +5,14 @@ import os
 
 from app.core.database import create_tables
 from app.api.v1.webhook import router as webhook_router
-from app.api.v1.dashboard import router as dashboard_router
 from app.api.v1.send_message import router as send_router
 from app.api.v1.human_send import router as human_send_router
-from app.core.websocket_manager import active_connections
-from sqlalchemy.orm import Session
-from app.core.database import get_db
 from app.api.v1.conversations import router as conversations_router
-from app.api.v1.conversations import router as conversations_router
+from app.api.v1.routers.dashboard import router as dashboard_router   # ← caminho correto
 from app.api.v1.reports import router as reports_router
-#from app.api.v1.routers.dashboard import router as dashboard_router
+from app.core.websocket_manager import active_connections
+from app.core.tenant import TenantMiddleware
+from app.core.database import get_db
 
 app = FastAPI(
     title="OdontoIA SaaS",
@@ -31,7 +29,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Middleware leve de log (pode remover em produção)
+# Middleware simples de log (útil em produção)
 class SimpleRequestMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
         print(f"[REQUEST] {request.method} {request.url.path}")
@@ -41,7 +39,7 @@ class SimpleRequestMiddleware(BaseHTTPMiddleware):
 
 app.add_middleware(SimpleRequestMiddleware)
 
-# ================== ADMIN PANEL - SaaS (Seguro) ==================
+# ================== CHAVE ADMIN (SaaS) ==================
 ADMIN_API_KEY = os.getenv("ADMIN_API_KEY")
 if not ADMIN_API_KEY:
     raise RuntimeError("ADMIN_API_KEY não configurada no Railway!")
@@ -51,7 +49,7 @@ def verify_admin_key(api_key: str = Query(None, alias="api_key")):
         raise HTTPException(status_code=403, detail="Chave de admin inválida")
     return True
 
-# Criar nova clínica
+# ================== ROTAS ANTIGAS DO ADMIN (mantidas funcionando) ==================
 @app.get("/admin/create-tenant")
 def create_tenant(
     name: str = Query(...),
@@ -59,12 +57,9 @@ def create_tenant(
     whatsapp_number: str = Query(...),
     plan: str = Query("basic"),
     api_key: bool = Depends(verify_admin_key),
-    db: Session = Depends(get_db)
+    db=Depends(get_db)
 ):
     from app.models.tenant import Tenant
-    from sqlalchemy.orm import Session
-    from app.core.database import get_db
-
     if db.query(Tenant).filter(Tenant.whatsapp_number == whatsapp_number).first():
         raise HTTPException(400, "Número de WhatsApp já cadastrado")
 
@@ -77,22 +72,13 @@ def create_tenant(
         is_active=True,
         human_mode_active=False
     )
-
     db.add(new_tenant)
     db.commit()
     db.refresh(new_tenant)
+    return {"status": "success", "tenant_id": new_tenant.id}
 
-    return {
-        "status": "success",
-        "message": f"Clínica '{name}' criada com sucesso!",
-        "tenant_id": new_tenant.id,
-        "whatsapp_number": new_tenant.whatsapp_number,
-        "plan": new_tenant.plan
-    }
-
-# Listar clínicas
 @app.get("/admin/tenants")
-def list_tenants(api_key: bool = Depends(verify_admin_key), db: Session = Depends(get_db)):
+def list_tenants(api_key: bool = Depends(verify_admin_key), db=Depends(get_db)):
     from app.models.tenant import Tenant
     tenants = db.query(Tenant).all()
     return {
@@ -107,14 +93,12 @@ def list_tenants(api_key: bool = Depends(verify_admin_key), db: Session = Depend
         } for t in tenants]
     }
 
-# ================== ROTAS PRINCIPAIS ==================
+# ================== ROTAS NOVAS (production-ready) ==================
 app.include_router(webhook_router, prefix="/api/v1")
-app.include_router(dashboard_router, prefix="/dashboard")
 app.include_router(send_router, prefix="/api")
 app.include_router(human_send_router, prefix="/api")
 app.include_router(conversations_router, prefix="/api/v1")
-#app.include_router(dashboard_router, prefix="/api/v1")
-app.include_router(conversations_router)
+app.include_router(dashboard_router)           # ← sem prefixo extra (já vem com /dashboard no router)
 app.include_router(reports_router)
 
 # WebSocket
