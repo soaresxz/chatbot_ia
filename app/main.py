@@ -231,12 +231,16 @@ def get_dashboard_conversations(db=Depends(get_db)):
 
 @app.get("/api/v1/conversations")
 def get_conversations(
-    tenant_id: str = Query("sandbox_twilio"),   # fallback para o sandbox que você usa
+    tenant_id: str = Query(None),
     api_key: str = Query(None, alias="api_key"),
     db=Depends(get_db)
 ):
     if api_key != "senhaadminteste":
         raise HTTPException(403, "Chave inválida")
+
+    # Força o sandbox para teste (para ver as mensagens reais do Twilio)
+    if not tenant_id or tenant_id == "clinica_odonto_sorriso":
+        tenant_id = "sandbox_twilio"
 
     from app.models.message_log import MessageLog
 
@@ -248,13 +252,12 @@ def get_conversations(
     return {
         "conversas": [{
             "id": str(m.id),
-            "mensagem": m.message,
+            "mensagem": m.message or "",
             "de": "paciente" if getattr(m, 'from_user', True) else "bot",
             "data": m.created_at.strftime("%d/%m %H:%M"),
             "telefone": getattr(m, 'from_phone', '+14155238886')
         } for m in messages]
     }
-
 # Root
 @app.get("/")
 async def root():
