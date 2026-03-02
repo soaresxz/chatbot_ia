@@ -184,21 +184,37 @@ def list_patients(tenant_id: str, db=Depends(get_db)):
         } for p in patients]
     }
 
+@app.get("/clinica/{tenant_id}/pacientes")
+def list_patients(tenant_id: str, db=Depends(get_db)):
+    from app.models.patient import Patient
+    patients = db.query(Patient).filter(Patient.tenant_id == tenant_id).all()
+    return {
+        "total": len(patients),
+        "pacientes": [{
+            "id": p.id,
+            "nome": p.name,
+            "telefone": p.phone,
+            "criado_em": p.created_at.strftime("%d/%m/%Y %H:%M")
+        } for p in patients]
+    }
+
 @app.post("/clinica/{tenant_id}/pacientes")
 def create_patient(tenant_id: str, data: dict, db=Depends(get_db)):
     from app.models.patient import Patient
     new_patient = Patient(
         tenant_id=tenant_id,
         name=data.get("nome"),
-        phone=data.get("telefone"),
-        email=data.get("email"),
-        birth_date=data.get("aniversario"),
-        notes=data.get("observacoes")
+        phone=data.get("telefone")
     )
     db.add(new_patient)
     db.commit()
     db.refresh(new_patient)
-    return {"status": "success", "paciente_id": new_patient.id, "nome": new_patient.name}
+    return {
+        "status": "success", 
+        "paciente_id": new_patient.id, 
+        "nome": new_patient.name,
+        "telefone": new_patient.phone
+    }
 
 # Root
 @app.get("/")

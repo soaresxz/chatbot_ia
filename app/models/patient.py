@@ -12,11 +12,8 @@ class Patient(Base):
     
     name = Column(String, nullable=False)
     phone = Column(String, nullable=False)
-    email = Column(String, nullable=True)
-    notes = Column(String, nullable=True)
     
     created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relacionamentos
     tenant = relationship("Tenant", back_populates="patients")
