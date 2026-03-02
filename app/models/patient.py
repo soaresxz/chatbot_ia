@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, DateTime, ForeignKey, Float
+from sqlalchemy import Column, String, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import uuid
@@ -11,8 +11,7 @@ class Patient(Base):
     tenant_id = Column(String, ForeignKey("tenants.id"), nullable=False)
     
     name = Column(String, nullable=False)
-    phone = Column(String, nullable=False, unique=False)  # pode repetir em clínicas diferentes
-    birth_date = Column(DateTime, nullable=True)
+    phone = Column(String, nullable=False)
     email = Column(String, nullable=True)
     notes = Column(String, nullable=True)
     
