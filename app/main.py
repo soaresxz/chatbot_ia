@@ -299,6 +299,33 @@ async def release_conversation(request: Request, tenant_id: str = Query(...), ap
 
     return {"status": "success", "mode": "ai_mode"}
 
+@app.post("/admin/change-plan")
+def change_plan(
+    tenant_id: str = Query(...),
+    new_plan: str = Query(...),
+    api_key: str = Query(None, alias="api_key"),
+    db=Depends(get_db)
+):
+    if api_key != "senhaadminteste":
+        raise HTTPException(403, "Chave inválida")
+
+    from app.models.tenant import Tenant
+
+    tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+    if not tenant:
+        raise HTTPException(404, "Clínica não encontrada")
+
+    tenant.plan = new_plan
+    db.commit()
+    db.refresh(tenant)
+
+    return {
+        "status": "success",
+        "mensagem": f"Plano da clínica '{tenant.name}' alterado para **{new_plan}** com sucesso!",
+        "tenant_id": tenant.id,
+        "novo_plano": tenant.plan
+    }
+
 # ================== ROOT ==================
 @app.get("/")
 async def root():
