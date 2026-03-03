@@ -13,7 +13,7 @@ router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
 
 @router.get("/clinica/{tenant_id}")
-async def get_clinica_dashboard(
+def get_clinica_dashboard(
     tenant_id: str,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
@@ -22,7 +22,7 @@ async def get_clinica_dashboard(
         raise HTTPException(403, "Acesso negado")
 
     try:
-        metrics = await DashboardService.get_clinica_dashboard(db, tenant_id)
+        metrics = DashboardService.get_clinica_dashboard(db, tenant_id)
         return {"metrics": metrics, "tenant_id": tenant_id}
     except Exception as e:
         print(f"❌ ERRO DASHBOARD: {str(e)}")
