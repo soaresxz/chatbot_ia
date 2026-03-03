@@ -1,15 +1,23 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 from collections import defaultdict
 from app.core.database import get_db
 from app.models.message_log import MessageLog
 from app.models.tenant import Tenant
+from app.core.auth import get_current_user
 
 router = APIRouter(prefix="/conversations")
 
 @router.get("")
-def list_conversations(tenant_id: str = Query(...), db: Session = Depends(get_db)):
+def list_conversations(
+    tenant_id: str = Query(...), 
+    db: Session = Depends(get_db), 
+    current_user=Depends(get_current_user),
+):
+    if current_user.role == "clinic_user" and current_user.tenant_id != tenant_id:
+        raise HTTPException(status_code=403, detail="Acesso negado")
+    
     tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
     if not tenant:
         return {"conversations": []}
@@ -45,7 +53,15 @@ def list_conversations(tenant_id: str = Query(...), db: Session = Depends(get_db
 
 
 @router.get("/{patient_phone}")
-def get_conversation(patient_phone: str, tenant_id: str = Query(...), db: Session = Depends(get_db)):
+def get_conversation(
+    patient_phone: str, 
+    tenant_id: str = Query(...), 
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user)
+):
+    if current_user.role == "clinic_user" and current_user.tenant_id != tenant_id:
+        raise HTTPException(status_code=403, detail="Acesso negado")
+    
     messages = db.query(MessageLog).filter(
         MessageLog.tenant_id == tenant_id,
         (MessageLog.from_phone == patient_phone) | (MessageLog.to_phone == patient_phone)

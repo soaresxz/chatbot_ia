@@ -7,12 +7,17 @@ from app.services.whatsapp.twilio_provider import TwilioProvider
 from uuid import uuid4
 from datetime import datetime
 import logging
+from app.core.auth import get_current_user
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
 @router.post("/human-send")
-async def human_send(request: Request, db: Session = Depends(get_db)):
+async def human_send(
+    request: Request, 
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user)
+):
     try:
         data = await request.json()
     except Exception:
