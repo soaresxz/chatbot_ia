@@ -1,12 +1,12 @@
 """
-Rotas administrativas — apenas super_admin.
-
 Paths gerados (sem prefixo adicional no include_router):
-  GET  /admin/tenants           → lista clínicas (usado pelo frontend)
-  GET  /admin/create-tenant     → cria clínica via query params (compatibilidade frontend)
-  POST /admin/tenants           → cria clínica via JSON body (Swagger / novos clientes)
-  PATCH /admin/tenants/{id}/plan → altera plano
-  POST /admin/change-plan       → altera plano via query params (legado)
+  GET  /admin/tenants
+  POST /admin/tenants           (JSON body — Swagger)
+  GET  /admin/create-tenant     (query params — compatibilidade frontend)
+  PATCH /admin/tenants/{id}/plan
+  POST /admin/change-plan       (query params — legado)
+  DELETE /admin/tenants/{id}
+  POST /admin/tenants/{id}/rotate-key  → gera nova api_key para o tenant
 """
 import re
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -15,6 +15,7 @@ from pydantic import BaseModel
 
 from app.core.database import get_db
 from app.core.auth import require_admin
+from app.core.tenant_auth import generate_api_key
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -44,6 +45,7 @@ def _build_tenant(db, name, dentist_name, whatsapp_number, plan):
         plan=plan,
         is_active=True,
         human_mode_active=False,
+        api_key=generate_api_key(),   # ← gerada automaticamente
     )
     db.add(t)
     db.commit()
@@ -51,7 +53,7 @@ def _build_tenant(db, name, dentist_name, whatsapp_number, plan):
     return t
 
 
-# ── listar clínicas ───────────────────────────────────────────
+# ── listar ───────────────────────────────────────────────────
 
 @router.get("/tenants")
 def list_tenants(
@@ -71,13 +73,14 @@ def list_tenants(
                 "whatsapp_number": t.whatsapp_number,
                 "plan": t.plan,
                 "is_active": t.is_active,
+                "has_api_key": t.api_key is not None,  # não expõe a chave, só informa se existe
             }
             for t in tenants
         ],
     }
 
 
-# ── criar clínica — GET com query params (compatibilidade frontend) ──
+# ── criar — GET query params (frontend legado) ────────────────
 
 @router.get("/create-tenant", summary="Criar clínica (frontend legado)")
 def create_tenant_get(
@@ -89,10 +92,15 @@ def create_tenant_get(
     db: Session = Depends(get_db),
 ):
     t = _build_tenant(db, name, dentist_name, whatsapp_number, plan)
-    return {"status": "success", "tenant_id": t.id, "name": t.name}
+    return {
+        "status": "success",
+        "tenant_id": t.id,
+        "name": t.name,
+        "api_key": t.api_key,   # exposta só na criação
+    }
 
 
-# ── criar clínica — POST com JSON body (Swagger / API) ───────
+# ── criar — POST JSON (Swagger / API) ────────────────────────
 
 class CreateTenantRequest(BaseModel):
     name: str
@@ -115,10 +123,35 @@ def create_tenant_post(
         "dentist_name": t.dentist_name,
         "whatsapp_number": t.whatsapp_number,
         "plan": t.plan,
+        "api_key": t.api_key,   # exposta só na criação — guarde em local seguro!
     }
 
 
-# ── alterar plano — PATCH JSON (novo) ────────────────────────
+# ── rotacionar api_key ────────────────────────────────────────
+
+@router.post("/tenants/{tenant_id}/rotate-key", summary="Gerar nova api_key para a clínica")
+def rotate_api_key(
+    tenant_id: str,
+    current_user=Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    from app.models.tenant import Tenant
+
+    tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+    if not tenant:
+        raise HTTPException(404, "Clínica não encontrada")
+
+    tenant.api_key = generate_api_key()
+    db.commit()
+    db.refresh(tenant)
+    return {
+        "status": "success",
+        "tenant_id": tenant.id,
+        "api_key": tenant.api_key,   # exposta só aqui — guarde em local seguro!
+    }
+
+
+# ── alterar plano ─────────────────────────────────────────────
 
 class UpdatePlanRequest(BaseModel):
     plan: str
@@ -141,8 +174,6 @@ def change_plan_patch(
     db.refresh(tenant)
     return {"status": "success", "tenant_id": tenant.id, "novo_plano": tenant.plan}
 
-
-# ── alterar plano — POST query params (legado) ───────────────
 
 @router.post("/change-plan", summary="Alterar plano (query params, legado)")
 def change_plan_post(
@@ -167,7 +198,7 @@ def change_plan_post(
     }
 
 
-# ── desativar clínica ─────────────────────────────────────────
+# ── desativar ─────────────────────────────────────────────────
 
 @router.delete("/tenants/{tenant_id}")
 def deactivate_tenant(

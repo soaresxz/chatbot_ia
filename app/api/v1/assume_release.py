@@ -1,18 +1,16 @@
 """
-Paths gerados (com prefix="/api/v1" no include_router):
-  POST /api/v1/conversations/assume
-  POST /api/v1/conversations/release
+Paths (com prefix="/api/v1" no include_router):
+  POST /api/v1/conversations/assume   → JWT do usuário logado
+  POST /api/v1/conversations/release  → api_key do tenant (substitui ADMIN_API_KEY global)
 """
-import os
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.auth import get_current_user
+from app.core.tenant_auth import get_tenant_by_api_key
 
 router = APIRouter(prefix="/conversations", tags=["conversas - atendimento"])
-
-ADMIN_API_KEY = os.getenv("ADMIN_API_KEY")
 
 
 @router.post("/assume")
@@ -64,14 +62,10 @@ async def assume_conversation(
 @router.post("/release")
 async def release_conversation(
     request: Request,
-    tenant_id: str = Query(...),
-    api_key: str = Query(None, alias="api_key"),
+    # get_tenant_by_api_key já valida api_key + tenant_id juntos
+    tenant=Depends(get_tenant_by_api_key),
     db: Session = Depends(get_db),
 ):
-    # Mantido com api_key para compatibilidade com integrações existentes
-    if api_key != ADMIN_API_KEY:
-        raise HTTPException(403, "Chave inválida")
-
     body = {}
     try:
         body = await request.json()
@@ -87,7 +81,7 @@ async def release_conversation(
     status = (
         db.query(ConversationStatus)
         .filter(
-            ConversationStatus.tenant_id == tenant_id,
+            ConversationStatus.tenant_id == tenant.id,
             ConversationStatus.patient_phone == patient_phone,
         )
         .first()
