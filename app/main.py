@@ -14,6 +14,7 @@ from app.api.v1.reports import router as reports_router
 from app.core.websocket_manager import active_connections
 from app.core.database import get_db
 from pydantic import BaseModel
+from app.api.v1.auth import router as auth_router
 
 app = FastAPI(
     title="OdontoIA SaaS",
@@ -101,6 +102,7 @@ app.include_router(human_send_router, prefix="/api")
 app.include_router(conversations_router, prefix="/api/v1")
 app.include_router(dashboard_router)
 app.include_router(reports_router)
+app.include_router(auth_router, prefix="/api/v1")
 
 # ================== WEBSOCKET com keepalive ==================
 @app.websocket("/ws")

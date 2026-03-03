@@ -1,4 +1,5 @@
 import google.generativeai as genai
+from datetime import datetime
 from app.utils.prompts import ODONTO_PROMPT
 from app.core.config import settings
 from app.core.database import SessionLocal
@@ -9,13 +10,16 @@ model = genai.GenerativeModel('gemini-2.5-flash')
 
 conversation_history = {}
 
+
 async def get_services_list(tenant_id: str) -> str:
     db = SessionLocal()
-    services = db.query(Service).filter(
-        Service.tenant_id == tenant_id,
-        Service.is_active == True
-    ).all()
-    db.close()
+    try:
+        services = db.query(Service).filter(
+            Service.tenant_id == tenant_id,
+            Service.is_active == True
+        ).all()
+    finally:
+        db.close()
 
     if not services:
         return "Serviços sob consulta (vamos avaliar seu caso)."
@@ -24,17 +28,6 @@ async def get_services_list(tenant_id: str) -> str:
     for s in services:
         lines.append(f"- {s.name}: a partir de R$ {float(s.price_from):,.2f}".replace(",", "."))
     return "\n".join(lines)
-
-
-async def get_ai_response(message: str, tenant, from_number: str, available_slots: list = None):
-    """Resposta da IA com contexto real da agenda"""
-    
-    slots_text = "Nenhum horário disponível encontrado."
-    if available_slots:
-        slots_text = "\n".join([
-            f"• {slot['date']} às {slot['time']} com {slot['dentist']}" 
-            for slot in available_slots[:5]  # mostra só os 5 primeiros
-        ])
 
 
 async def get_ai_response(message: str, tenant, phone: str) -> str:
@@ -46,13 +39,14 @@ async def get_ai_response(message: str, tenant, phone: str) -> str:
         conversation_history[phone] = conversation_history[phone][-10:]
 
     history = "\n".join(conversation_history[phone])
-
     services_text = await get_services_list(tenant.id)
 
+    # ✅ Passa today para resolver o placeholder {today} no prompt
     prompt = ODONTO_PROMPT.format(
         clinic_name=tenant.name,
-        dentist_name=tenant.dentist_name,
-        services_list=services_text
+        dentist_name=getattr(tenant, 'dentist_name', ''),
+        services_list=services_text,
+        today=datetime.now().strftime('%d/%m/%Y')
     )
 
     full_prompt = f"{prompt}\n\nHistórico:\n{history}\n\nResponda direto:"
