@@ -81,11 +81,3 @@ def create_first_admin(data: RegisterRequest, db: Session = Depends(get_db)):
     db.add(new_admin)
     db.commit()
     return {"status": "success", "message": "Admin criado. Endpoint desativado."}
-```
-
----
-
-**`requirements.txt`** — adicione estas 2 linhas:
-```
-python-jose[cryptography]==3.3.0
-passlib[bcrypt]==1.7.4
