@@ -1,12 +1,12 @@
 """
 Paths gerados (sem prefixo adicional no include_router):
   GET  /admin/tenants
-  POST /admin/tenants           (JSON body — Swagger)
-  GET  /admin/create-tenant     (query params — compatibilidade frontend)
+  POST /admin/tenants                  (JSON body — Swagger)
+  GET  /admin/create-tenant            (query params — compatibilidade frontend)
   PATCH /admin/tenants/{id}/plan
-  POST /admin/change-plan       (query params — legado)
+  POST /admin/change-plan              (query params — legado)
+  POST /admin/tenants/{id}/rotate-key  (gera nova api_key)
   DELETE /admin/tenants/{id}
-  POST /admin/tenants/{id}/rotate-key  → gera nova api_key para o tenant
 """
 import re
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -45,7 +45,7 @@ def _build_tenant(db, name, dentist_name, whatsapp_number, plan):
         plan=plan,
         is_active=True,
         human_mode_active=False,
-        api_key=generate_api_key(),   # ← gerada automaticamente
+        api_key=generate_api_key(),
     )
     db.add(t)
     db.commit()
@@ -73,7 +73,7 @@ def list_tenants(
                 "whatsapp_number": t.whatsapp_number,
                 "plan": t.plan,
                 "is_active": t.is_active,
-                "has_api_key": t.api_key is not None,  # não expõe a chave, só informa se existe
+                "has_api_key": t.api_key is not None,
             }
             for t in tenants
         ],
@@ -96,7 +96,7 @@ def create_tenant_get(
         "status": "success",
         "tenant_id": t.id,
         "name": t.name,
-        "api_key": t.api_key,   # exposta só na criação
+        "api_key": t.api_key,
     }
 
 
@@ -123,7 +123,7 @@ def create_tenant_post(
         "dentist_name": t.dentist_name,
         "whatsapp_number": t.whatsapp_number,
         "plan": t.plan,
-        "api_key": t.api_key,   # exposta só na criação — guarde em local seguro!
+        "api_key": t.api_key,  # salve em local seguro!
     }
 
 
@@ -147,7 +147,7 @@ def rotate_api_key(
     return {
         "status": "success",
         "tenant_id": tenant.id,
-        "api_key": tenant.api_key,   # exposta só aqui — guarde em local seguro!
+        "api_key": tenant.api_key,  # salve em local seguro!
     }
 
 
