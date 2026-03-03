@@ -15,6 +15,7 @@ from app.core.websocket_manager import active_connections
 from app.core.database import get_db
 from pydantic import BaseModel
 from app.api.v1.auth import router as auth_router
+from app.core.auth import get_current_user, require_admin
 
 app = FastAPI(
     title="OdontoIA SaaS",
@@ -44,19 +45,37 @@ ADMIN_API_KEY = os.getenv("ADMIN_API_KEY")
 if not ADMIN_API_KEY:
     raise RuntimeError("ADMIN_API_KEY não configurada no Railway!")
 
-def verify_admin_key(api_key: str = Query(None, alias="api_key")):
-    if not api_key or api_key != ADMIN_API_KEY:
-        raise HTTPException(status_code=403, detail="Chave de admin inválida")
-    return True
+
+
+
 
 # ================== ADMIN ==================
+@app.post("/admin/change-plan")
+def change_plan(tenant_id: str = Query(...), new_plan: str = Query(...),
+    current_user=Depends(require_admin), db=Depends(get_db)):
+    from app.models.tenant import Tenant
+    tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+    if not tenant:
+        raise HTTPException(404, "Clínica não encontrada")
+    tenant.plan = new_plan
+    db.commit()
+    db.refresh(tenant)
+    return {
+        "status": "success",
+        "mensagem": f"Plano da clínica '{tenant.name}' alterado para **{new_plan}** com sucesso!",
+        "tenant_id": tenant.id,
+        "novo_plano": tenant.plan
+    }
+    
+    
+    
 @app.get("/admin/create-tenant")
 def create_tenant(
     name: str = Query(...),
     dentist_name: str = Query(...),
     whatsapp_number: str = Query(...),
     plan: str = Query("basic"),
-    api_key: bool = Depends(verify_admin_key),
+    current_user=Depends(require_admin),
     db=Depends(get_db)
 ):
     from app.models.tenant import Tenant
@@ -78,7 +97,7 @@ def create_tenant(
 
 
 @app.get("/admin/tenants")
-def list_tenants(api_key: bool = Depends(verify_admin_key), db=Depends(get_db)):
+def list_tenants(current_user=Depends(require_admin), db=Depends(get_db)):
     from app.models.tenant import Tenant
     tenants = db.query(Tenant).all()
     return {
@@ -139,8 +158,15 @@ def startup_event():
     print("🚀 OdontoIA SaaS iniciado com sucesso!")
 
 # ================== DASHBOARD ==================
+
 @app.get("/dashboard/clinica/{tenant_id}")
-async def get_clinica_dashboard(tenant_id: str, db=Depends(get_db)):
+async def get_clinica_dashboard(
+    tenant_id: str,
+    db=Depends(get_db),
+    current_user=Depends(get_current_user),  # ← aqui na assinatura
+):
+    if current_user.role == "clinic_user" and current_user.tenant_id != tenant_id:
+        raise HTTPException(403, "Acesso negado")
     from app.services.dashboard_service import DashboardService
     try:
         metrics = await DashboardService.get_clinica_dashboard(db, tenant_id)
@@ -149,10 +175,14 @@ async def get_clinica_dashboard(tenant_id: str, db=Depends(get_db)):
         print(f"❌ ERRO DASHBOARD: {str(e)}")
         return {"error": str(e)}
 
+
 @app.get("/dashboard/conversations")
-def get_dashboard_conversations(db=Depends(get_db)):
+def get_dashboard_conversations(
+    db=Depends(get_db),
+    current_user=Depends(get_current_user),  # ← aqui na assinatura
+):
     from app.models.message_log import MessageLog
-    tenant_id = "sandbox_twilio"
+    tenant_id = current_user.tenant_id or "sandbox_twilio"  # ← usa o tenant do usuário logado
     messages = db.query(MessageLog)\
         .filter(MessageLog.tenant_id == tenant_id)\
         .order_by(MessageLog.created_at.desc())\
@@ -161,7 +191,7 @@ def get_dashboard_conversations(db=Depends(get_db)):
         "conversas": [{
             "id": str(m.id),
             "paciente": "Cliente WhatsApp",
-            "telefone": m.from_phone or "+14155238886",
+            "telefone": m.from_phone or "",
             "mensagem": m.message,
             "data": m.created_at.strftime("%d/%m %H:%M"),
             "direcao": "recebida" if m.direction == "in" else "enviada",
@@ -237,9 +267,9 @@ def create_patient(tenant_id: str, data: CreatePatient, db=Depends(get_db)):
 
 # ================== ASSUME / RELEASE ==================
 @app.post("/api/v1/conversations/assume")
-async def assume_conversation(request: Request, tenant_id: str = Query(...), api_key: str = Query(None, alias="api_key"), db=Depends(get_db)):
-    if api_key != ADMIN_API_KEY:
-        raise HTTPException(403, "Chave inválida")
+async def assume_conversation(request: Request, tenant_id: str = Query(...), current_user=Depends(get_current_user), db=Depends(get_db)):
+    if current_user.role == "clinic_user" and current_user.tenant_id != tenant_id: 
+        raise HTTPException(403, "Acesso negado")
 
     body = {}
     try:
