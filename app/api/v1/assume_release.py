@@ -5,6 +5,7 @@ Paths (com prefix="/api/v1" no include_router):
 """
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
+from pydantic import BaseModel
 
 from app.core.database import get_db
 from app.core.auth import get_current_user
@@ -13,9 +14,13 @@ from app.core.tenant_auth import get_tenant_by_api_key
 router = APIRouter(prefix="/conversations", tags=["conversas - atendimento"])
 
 
+class ConversationBody(BaseModel):
+    patient_phone: str
+
+
 @router.post("/assume")
 async def assume_conversation(
-    request: Request,
+    body: ConversationBody,
     tenant_id: str = Query(...),
     current_user=Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -23,13 +28,7 @@ async def assume_conversation(
     if current_user.role == "clinic_user" and current_user.tenant_id != tenant_id:
         raise HTTPException(403, "Acesso negado")
 
-    body = {}
-    try:
-        body = await request.json()
-    except Exception:
-        pass
-
-    patient_phone = body.get("patient_phone") or body.get("patientPhone")
+    patient_phone = body.patient_phone
     if not patient_phone:
         raise HTTPException(422, "patient_phone é obrigatório")
 
@@ -61,18 +60,11 @@ async def assume_conversation(
 
 @router.post("/release")
 async def release_conversation(
-    request: Request,
-    # get_tenant_by_api_key já valida api_key + tenant_id juntos
+    body: ConversationBody,
     tenant=Depends(get_tenant_by_api_key),
     db: Session = Depends(get_db),
 ):
-    body = {}
-    try:
-        body = await request.json()
-    except Exception:
-        pass
-
-    patient_phone = body.get("patient_phone") or body.get("patientPhone")
+    patient_phone = body.patient_phone
     if not patient_phone:
         raise HTTPException(422, "patient_phone é obrigatório")
 
