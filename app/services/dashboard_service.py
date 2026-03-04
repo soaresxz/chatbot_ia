@@ -43,10 +43,7 @@ class DashboardService:
                 and_(
                     Appointment.tenant_id == tenant_id,
                     func.date(Appointment.scheduled_date) == hoje,
-                    Appointment.status.in_([
-                        AppointmentStatus.CANCELLED,
-                        AppointmentStatus.NO_SHOW,
-                    ]),
+                    Appointment.status == AppointmentStatus.CANCELLED,
                 )
             )
         ) or 0
