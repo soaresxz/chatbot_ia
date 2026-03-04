@@ -2,7 +2,7 @@ from app.core.database import SessionLocal
 from app.models.tenant import Tenant
 
 def change_plan():
-    db = SessionLocal()
+    db = get_db =
     
     while True:
         print("\n" + "="*70)
