@@ -60,15 +60,8 @@ class DashboardService:
 
         # ── Faturamento real ─────────────────────────────────
 
-        faturamento_mes = db.scalar(
-            select(func.coalesce(func.sum(Appointment.value), 0.0)).where(
-                and_(
-                    Appointment.tenant_id == tenant_id,
-                    Appointment.scheduled_date >= inicio_mes_dt,
-                    Appointment.status == AppointmentStatus.COMPLETED,
-                )
-            )
-        ) or 0.0
+        # TODO: coluna value ainda não existe no banco — adicionar via ALTER TABLE
+        faturamento_mes = 0.0
 
         # ── Conversas (pacientes únicos) ──────────────────────
 
