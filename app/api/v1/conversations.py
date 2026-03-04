@@ -7,23 +7,17 @@ from typing import Optional
 from app.core.database import get_db
 from app.models.message_log import MessageLog
 from app.models.tenant import Tenant
+from app.models.conversation_status import ConversationStatus
 from app.core.auth import get_current_user
 
 router = APIRouter(prefix="/conversations")
 
 
 def resolve_tenant_id(current_user, tenant_id_param: Optional[str]) -> str:
-    """
-    Nunca confia no tenant_id vindo do frontend para autorização.
-    - clinic_user → sempre usa o tenant_id do JWT, ignora query param
-    - super_admin  → pode passar tenant_id por query param (obrigatório)
-    """
     if current_user.role == "clinic_user":
         if not current_user.tenant_id:
             raise HTTPException(403, "Usuário sem clínica associada")
         return current_user.tenant_id
-
-    # super_admin
     if not tenant_id_param:
         raise HTTPException(422, "tenant_id é obrigatório para administradores")
     return tenant_id_param
@@ -48,6 +42,14 @@ def list_conversations(
         .all()
     )
 
+    # ✅ Carrega todos os ConversationStatus do tenant de uma vez (evita N+1 queries)
+    statuses = {
+        s.patient_phone: s
+        for s in db.query(ConversationStatus).filter(
+            ConversationStatus.tenant_id == tid
+        ).all()
+    }
+
     grouped = defaultdict(list)
     for msg in messages:
         phone = msg.from_phone if msg.direction == "in" else msg.to_phone
@@ -57,6 +59,10 @@ def list_conversations(
     result = []
     for phone, msgs in grouped.items():
         last = msgs[0]
+        # ✅ Status individual por patient_phone, não do tenant inteiro
+        conv_status = statuses.get(phone)
+        is_human = conv_status.human_mode_active if conv_status else False
+
         result.append({
             "id": phone,
             "patient_name": f"Paciente {phone[-4:]}",
@@ -64,7 +70,7 @@ def list_conversations(
             "last_message": last.message or "",
             "last_message_time": last.created_at.isoformat(),
             "updated_at": last.created_at.isoformat(),
-            "status": "human_mode" if getattr(tenant, "human_mode_active", False) else "ai_mode",
+            "status": "human_mode" if is_human else "ai_mode",
             "unread_count": 0,
         })
 

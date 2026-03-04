@@ -12,16 +12,14 @@ router = APIRouter()
 async def twilio_webhook(request: Request, db: Session = Depends(get_db)):
     try:
         form = await request.form()
-        
+
         from_number = form.get("From", "").strip()
         to_number   = form.get("To", "").strip()
         body        = form.get("Body", "").strip()
 
-        # Normalização do número
         def normalize(n: str) -> str:
             return ''.join(filter(str.isdigit, n.replace("whatsapp:", "").replace("+", "")))
 
-        # Busca tenant
         tenant = db.query(Tenant).filter(
             Tenant.whatsapp_number.ilike(f"%{normalize(to_number)}%")
         ).first()
@@ -29,9 +27,9 @@ async def twilio_webhook(request: Request, db: Session = Depends(get_db)):
         if not tenant:
             return {"status": "ignored"}
 
-        # Mensagem da atendente → modo humano
+        # Mensagem da atendente → ativa modo humano para o paciente (to_number)
         if normalize(from_number) == normalize(tenant.whatsapp_number):
-            handle_attendant_message(tenant, to_number)
+            await handle_attendant_message(tenant, to_number)  # ✅ await adicionado
             return {"status": "human_takeover"}
 
         # Mensagem do paciente
