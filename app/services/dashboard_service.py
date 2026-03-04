@@ -1,4 +1,4 @@
-from sqlalchemy import select, func, and_, distinct
+from sqlalchemy import select, func, and_
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 
@@ -104,8 +104,10 @@ class DashboardService:
 
         # ── Taxa de conversão (pacientes únicos → agendamentos) ─
 
+        # Conta agendamentos do mês como proxy de conversão
+        # (patient_id ainda não existe no banco)
         pacientes_com_agendamento = db.scalar(
-            select(func.count(distinct(Appointment.patient_id))).where(
+            select(func.count()).where(
                 and_(
                     Appointment.tenant_id == tenant_id,
                     Appointment.created_at >= inicio_mes_dt,
