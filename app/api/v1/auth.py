@@ -8,9 +8,11 @@ from app.models.tenant import Tenant
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
+
 class LoginRequest(BaseModel):
     email: str
     password: str
+
 
 class RegisterRequest(BaseModel):
     email: str
@@ -19,16 +21,26 @@ class RegisterRequest(BaseModel):
     role: str = "clinic_user"
     tenant_id: str | None = None
 
+
 @router.post("/login")
 def login(data: LoginRequest, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == data.email, User.is_active == True).first()
     if not user or not verify_password(data.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Email ou senha incorretos")
+
+    # ✅ Busca o plano do tenant para incluir no token
+    plan = "basic"
+    if user.tenant_id:
+        tenant = db.query(Tenant).filter(Tenant.id == user.tenant_id).first()
+        if tenant:
+            plan = tenant.plan or "basic"
+
     token = create_access_token({
         "sub": user.id,
         "email": user.email,
         "role": user.role,
         "tenant_id": user.tenant_id,
+        "plan": plan,  # ✅ incluído no JWT
     })
     return {
         "access_token": token,
@@ -39,8 +51,10 @@ def login(data: LoginRequest, db: Session = Depends(get_db)):
             "name": user.name,
             "role": user.role,
             "tenant_id": user.tenant_id,
+            "plan": plan,  # ✅ incluído na resposta
         }
     }
+
 
 @router.post("/register")
 def register(data: RegisterRequest, db: Session = Depends(get_db), _=Depends(require_admin)):
@@ -57,19 +71,26 @@ def register(data: RegisterRequest, db: Session = Depends(get_db), _=Depends(req
     db.commit()
     return {"status": "success", "user_id": new_user.id}
 
+
 @router.get("/me")
-def me(current_user=Depends(get_current_user)):
+def me(current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    plan = "basic"
+    if current_user.tenant_id:
+        tenant = db.query(Tenant).filter(Tenant.id == current_user.tenant_id).first()
+        if tenant:
+            plan = tenant.plan or "basic"
     return {
         "id": current_user.id,
         "email": current_user.email,
         "name": current_user.name,
         "role": current_user.role,
         "tenant_id": current_user.tenant_id,
+        "plan": plan,
     }
+
 
 @router.post("/create-first-admin")
 def create_first_admin(data: RegisterRequest, db: Session = Depends(get_db)):
-    """Só funciona se não existir nenhum super_admin ainda."""
     if db.query(User).filter(User.role == "super_admin").first():
         raise HTTPException(403, "Já existe um admin. Use /auth/register.")
     new_admin = User(
