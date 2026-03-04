@@ -14,37 +14,49 @@ from app.core.websocket_manager import broadcast
 
 FALLBACK_MESSAGE = "Aguarde um momento. Uma atendente vai te responder em breve. 😊"
 
+
+def normalize_phone(phone: str) -> str:
+    """Remove 'whatsapp:' e garante '+' no início."""
+    clean = phone.replace("whatsapp:", "").replace(" ", "").strip()
+    if clean and not clean.startswith("+"):
+        clean = "+" + clean
+    return clean
+
+
 async def process_incoming_message(from_number: str, body: str, to_number: str):
     db: Session = SessionLocal()
     try:
+        from_clean = normalize_phone(from_number)
+        to_clean = normalize_phone(to_number)
+
         tenant = db.query(Tenant).filter(
-            Tenant.whatsapp_number.ilike(f"%{to_number.replace('whatsapp:', '').replace('+', '').strip()}%")
+            Tenant.whatsapp_number.ilike(f"%{to_clean.replace('+', '')}%")
         ).first()
 
         if not tenant:
             print(f"⚠️ Nenhum tenant encontrado para o número: {to_number}")
             return
 
-        # ✅ FIX 2: para o bot se human_mode_active=True, independente de human_mode_until
+        # Verifica se modo humano está ativo para este paciente
         status = db.query(ConversationStatus).filter(
             ConversationStatus.tenant_id == tenant.id,
-            ConversationStatus.patient_phone == from_number,
+            ConversationStatus.patient_phone == from_clean,
             ConversationStatus.human_mode_active == True
         ).first()
 
+        human_mode = False
         if status:
-            # Se tem prazo, verifica se ainda está dentro do prazo
             if status.human_mode_until is None or datetime.utcnow() < status.human_mode_until:
-                print(f"🙋 Modo humano ativo para {from_number}, bot pausado.")
-                return
+                human_mode = True
+                print(f"🙋 Modo humano ativo para {from_clean}, bot pausado.")
 
-        # ✅ FIX 1: salva o timestamp antes do commit para evitar KeyError após expiração
+        # ✅ Sempre salva a mensagem recebida e faz broadcast — independente do modo
         now_in = datetime.utcnow()
         log_in = MessageLog(
             id=str(uuid.uuid4()),
             tenant_id=tenant.id,
-            from_phone=from_number,
-            to_phone=to_number,
+            from_phone=from_clean,   # ✅ normalizado
+            to_phone=to_clean,       # ✅ normalizado
             message=body,
             direction="in",
             created_at=now_in
@@ -55,7 +67,7 @@ async def process_incoming_message(from_number: str, body: str, to_number: str):
         await broadcast({
             "type": "new_message",
             "tenant_id": tenant.id,
-            "patient_phone": from_number,
+            "patient_phone": from_clean,
             "message": {
                 "id": log_in.id,
                 "content": body,
@@ -65,24 +77,27 @@ async def process_incoming_message(from_number: str, body: str, to_number: str):
             }
         })
 
+        # ✅ Se modo humano, para aqui — mensagem já foi salva e transmitida
+        if human_mode:
+            return
+
         # Gera resposta conforme plano
         if tenant.plan == "basic":
-            response_text = await handle_basic_plan(body, from_number, tenant)
+            response_text = await handle_basic_plan(body, from_clean, tenant)
         else:
             quick = get_quick_response(body, tenant.name or "clínica")
-            response_text = quick or await get_ai_response(body, tenant, from_number) or FALLBACK_MESSAGE
+            response_text = quick or await get_ai_response(body, tenant, from_clean) or FALLBACK_MESSAGE
 
         # Envia resposta
         provider = TwilioProvider()
-        await provider.send_message(from_number, response_text)
+        await provider.send_message(f"whatsapp:{from_clean}", response_text)
 
-        # ✅ FIX 1: mesmo padrão para log de saída
         now_out = datetime.utcnow()
         log_out = MessageLog(
             id=str(uuid.uuid4()),
             tenant_id=tenant.id,
-            from_phone=to_number,
-            to_phone=from_number,
+            from_phone=to_clean,     # ✅ número da clínica normalizado
+            to_phone=from_clean,     # ✅ número do paciente normalizado
             message=response_text,
             direction="out",
             created_at=now_out
@@ -93,7 +108,7 @@ async def process_incoming_message(from_number: str, body: str, to_number: str):
         await broadcast({
             "type": "new_message",
             "tenant_id": tenant.id,
-            "patient_phone": from_number,
+            "patient_phone": from_clean,
             "message": {
                 "id": log_out.id,
                 "content": response_text,
@@ -103,7 +118,7 @@ async def process_incoming_message(from_number: str, body: str, to_number: str):
             }
         })
 
-        print(f"✅ Resposta enviada para {from_number}")
+        print(f"✅ Resposta enviada para {from_clean}")
 
     finally:
         db.close()

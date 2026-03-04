@@ -13,6 +13,13 @@ from app.core.auth import get_current_user
 router = APIRouter(prefix="/conversations")
 
 
+def normalize_phone(phone: str) -> str:
+    clean = phone.replace("whatsapp:", "").replace(" ", "").strip()
+    if clean and not clean.startswith("+"):
+        clean = "+" + clean
+    return clean
+
+
 def resolve_tenant_id(current_user, tenant_id_param: Optional[str]) -> str:
     if current_user.role == "clinic_user":
         if not current_user.tenant_id:
@@ -52,7 +59,9 @@ def list_conversations(
 
     grouped = defaultdict(list)
     for msg in messages:
-        phone = msg.from_phone if msg.direction == "in" else msg.to_phone
+        # ✅ normaliza o phone para evitar chaves duplicadas (ex: "+55..." vs "whatsapp:+55...")
+        raw = msg.from_phone if msg.direction == "in" else msg.to_phone
+        phone = normalize_phone(raw) if raw else None
         if phone:
             grouped[phone].append(msg)
 

@@ -1,21 +1,27 @@
 """
 Paths (com prefix="/api/v1" no include_router):
-  POST /api/v1/conversations/assume   → JWT do usuário logado
-  POST /api/v1/conversations/release  → api_key do tenant (substitui ADMIN_API_KEY global)
+  POST /api/v1/conversations/assume   → JWT
+  POST /api/v1/conversations/release  → JWT (corrigido — antes usava api_key)
 """
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
 from app.core.database import get_db
 from app.core.auth import get_current_user
-from app.core.tenant_auth import get_tenant_by_api_key
 
 router = APIRouter(prefix="/conversations", tags=["conversas - atendimento"])
 
 
 class ConversationBody(BaseModel):
     patient_phone: str
+
+
+def normalize_phone(phone: str) -> str:
+    clean = phone.replace("whatsapp:", "").replace(" ", "").strip()
+    if clean and not clean.startswith("+"):
+        clean = "+" + clean
+    return clean
 
 
 @router.post("/assume")
@@ -28,9 +34,7 @@ async def assume_conversation(
     if current_user.role == "clinic_user" and current_user.tenant_id != tenant_id:
         raise HTTPException(403, "Acesso negado")
 
-    patient_phone = body.patient_phone
-    if not patient_phone:
-        raise HTTPException(422, "patient_phone é obrigatório")
+    phone = normalize_phone(body.patient_phone)
 
     from app.models.conversation_status import ConversationStatus
 
@@ -38,7 +42,7 @@ async def assume_conversation(
         db.query(ConversationStatus)
         .filter(
             ConversationStatus.tenant_id == tenant_id,
-            ConversationStatus.patient_phone == patient_phone,
+            ConversationStatus.patient_phone == phone,
         )
         .first()
     )
@@ -48,33 +52,45 @@ async def assume_conversation(
     else:
         status = ConversationStatus(
             tenant_id=tenant_id,
-            patient_phone=patient_phone,
+            patient_phone=phone,
             human_mode_active=True,
             human_mode_until=None,
         )
         db.add(status)
 
     db.commit()
+
+    # Notifica o dashboard sobre mudança de status
+    from app.core.websocket_manager import broadcast
+    await broadcast({
+        "type": "status_change",
+        "tenant_id": tenant_id,
+        "patient_phone": phone,
+        "status": "human_mode",
+    })
+
     return {"status": "success", "mode": "human_mode"}
 
 
 @router.post("/release")
 async def release_conversation(
     body: ConversationBody,
-    tenant=Depends(get_tenant_by_api_key),
+    tenant_id: str = Query(...),
+    current_user=Depends(get_current_user),  # ✅ JWT em vez de api_key
     db: Session = Depends(get_db),
 ):
-    patient_phone = body.patient_phone
-    if not patient_phone:
-        raise HTTPException(422, "patient_phone é obrigatório")
+    if current_user.role == "clinic_user" and current_user.tenant_id != tenant_id:
+        raise HTTPException(403, "Acesso negado")
+
+    phone = normalize_phone(body.patient_phone)
 
     from app.models.conversation_status import ConversationStatus
 
     status = (
         db.query(ConversationStatus)
         .filter(
-            ConversationStatus.tenant_id == tenant.id,
-            ConversationStatus.patient_phone == patient_phone,
+            ConversationStatus.tenant_id == tenant_id,
+            ConversationStatus.patient_phone == phone,
         )
         .first()
     )
@@ -82,5 +98,14 @@ async def release_conversation(
         status.human_mode_active = False
         status.human_mode_until = None
         db.commit()
+
+    # Notifica o dashboard sobre mudança de status
+    from app.core.websocket_manager import broadcast
+    await broadcast({
+        "type": "status_change",
+        "tenant_id": tenant_id,
+        "patient_phone": phone,
+        "status": "ai_mode",
+    })
 
     return {"status": "success", "mode": "ai_mode"}
