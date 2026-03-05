@@ -7,7 +7,7 @@ from sqlalchemy import select, func, and_
 
 PLAN_LIMITS = {
     "basic":      3_000,
-    "pro":        10_000,
+    "pro":        10,
     "enterprise": None,   # ilimitado
 }
 
