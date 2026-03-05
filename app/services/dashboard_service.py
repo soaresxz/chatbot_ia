@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from app.models.appointment import Appointment, AppointmentStatus
 from app.models.message_log import MessageLog
 from app.models.conversation_status import ConversationStatus
+from app.core.plan_limits import PLAN_LIMITS, get_monthly_message_count
 
 
 class DashboardService:
@@ -134,6 +135,13 @@ class DashboardService:
         # Estratégia: para cada mensagem "in", busca a próxima "out" mais próxima
         # Usa uma subquery para pegar pares in→out do mesmo tenant
 
+        # ── Uso do plano ──────────────────────────────────────
+        from app.models.tenant import Tenant
+        tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+        plan = tenant.plan if tenant else "basic"
+        mensagens_mes = get_monthly_message_count(db, tenant_id)
+        limite_plano = PLAN_LIMITS.get(plan)  # None = ilimitado
+
         tempo_medio_resposta = DashboardService._calc_avg_response_time(
             db, tenant_id, inicio_hoje
         )
@@ -163,6 +171,15 @@ class DashboardService:
             "conversas_humano": int(em_humano),
             "conversas_ia": int(em_ia),
             "tempo_medio_resposta_segundos": tempo_medio_resposta,
+
+            # Uso do plano
+            "plano": plan,
+            "mensagens_mes": int(mensagens_mes),
+            "limite_mensagens": limite_plano,  # None = ilimitado
+            "percentual_uso": (
+                round(mensagens_mes / limite_plano * 100, 1)
+                if limite_plano else None
+            ),
 
             # Legado (mantido para compatibilidade com frontend atual)
             "faturamento_projetado": round(float(faturamento_mes), 2),

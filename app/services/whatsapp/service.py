@@ -11,6 +11,7 @@ from app.services.intent_matcher import get_quick_response
 from app.services.basic_bot import handle_basic_plan
 from app.services.ai.gemini_agent import get_ai_response
 from app.core.websocket_manager import broadcast
+from app.core.plan_limits import check_plan_limit, LIMIT_REACHED_MESSAGE
 
 FALLBACK_MESSAGE = "Aguarde um momento. Uma atendente vai te responder em breve. 😊"
 
@@ -79,6 +80,14 @@ async def process_incoming_message(from_number: str, body: str, to_number: str):
 
         # ✅ Se modo humano, para aqui — mensagem já foi salva e transmitida
         if human_mode:
+            return
+
+        # ✅ Verifica limite do plano antes de responder
+        allowed, reason = check_plan_limit(db, tenant)
+        if not allowed:
+            print(f"🚫 Limite de plano atingido para {tenant.id}: {reason}")
+            provider = TwilioProvider()
+            await provider.send_message(f"whatsapp:{from_clean}", LIMIT_REACHED_MESSAGE)
             return
 
         # Gera resposta conforme plano
