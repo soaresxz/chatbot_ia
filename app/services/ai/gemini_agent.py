@@ -1,95 +1,175 @@
+"""
+Gemini Agent com suporte a function calling para agendamentos.
+
+Fluxo:
+1. Recebe mensagem + histórico
+2. Envia para Gemini com tools de agendamento (apenas planos Pro/Enterprise)
+3. Se Gemini chamar uma tool → executa → devolve resultado ao Gemini
+4. Retorna texto final para o paciente
+
+Detecta AGENDAMENTO_PENDENTE no resultado da tool para acionar fluxo SIM/NÃO.
+"""
+
+from __future__ import annotations
+
+import logging
+import os
+import re
+from typing import Optional
+
 import google.generativeai as genai
-from datetime import datetime
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.utils.prompts import ODONTO_PROMPT
-from app.core.config import settings
-from app.core.database import SessionLocal
-from app.models.service import Service
-from app.models.message_log import MessageLog
+from app.services.ai.appointment_tools import APPOINTMENT_TOOLS, execute_tool
 
-genai.configure(api_key=settings.GEMINI_API_KEY)
-model = genai.GenerativeModel('gemini-2.5-flash')
+logger = logging.getLogger(__name__)
 
-# ✅ Dicionário em memória removido
+# Configuração da API
+genai.configure(api_key=os.getenv("GOOGLE_API_KEY", ""))
 
-HISTORY_LIMIT = 10  # últimas N mensagens carregadas do banco
+SYSTEM_PROMPT = """Você é a assistente virtual de uma clínica odontológica. 
+Seja sempre cordial, objetiva e profissional.
 
+Para agendamentos:
+- Quando o paciente quiser marcar uma consulta, use a ferramenta verificar_disponibilidade para mostrar os horários disponíveis.
+- Depois que o paciente escolher o horário, use criar_agendamento e peça confirmação: "Para confirmar seu agendamento, responda SIM. Para cancelar, responda NÃO."
+- Quando o paciente perguntar sobre seus agendamentos, use listar_agendamentos_paciente.
 
-async def get_services_list(tenant_id: str) -> str:
-    db = SessionLocal()
-    try:
-        services = db.query(Service).filter(
-            Service.tenant_id == tenant_id,
-            Service.is_active == True
-        ).all()
-    finally:
-        db.close()
-
-    if not services:
-        return "Serviços sob consulta (vamos avaliar seu caso)."
-
-    lines = []
-    for s in services:
-        lines.append(f"- {s.name}: a partir de R$ {float(s.price_from):,.2f}".replace(",", "."))
-    return "\n".join(lines)
+Sempre confirme as informações antes de criar o agendamento.
+"""
 
 
-def load_history(db: Session, tenant_id: str, phone: str) -> list[str]:
+def _build_gemini_tools(has_scheduling: bool) -> Optional[list]:
+    """Retorna as tools do Gemini apenas se o plano permite agendamentos."""
+    if not has_scheduling:
+        return None
+    return [{"function_declarations": APPOINTMENT_TOOLS}]
+
+
+async def generate_response(
+    message: str,
+    history: list[dict],
+    db: AsyncSession,
+    tenant_id: int,
+    patient_phone: str,
+    has_scheduling: bool = False,       # True para Pro/Enterprise
+    tenant_context: str = "",           # Ex: "Clínica Sorriso | Dr. João"
+) -> tuple[str, Optional[dict]]:
     """
-    Carrega as últimas HISTORY_LIMIT mensagens da conversa do banco.
-    Mensagens 'in' → "Paciente: ..."
-    Mensagens 'out' → "Luna: ..."
+    Gera resposta do Gemini.
+
+    Retorna:
+        (texto_resposta, pending_appointment_info | None)
+
+    pending_appointment_info é dict {id, data, hora, procedimento} quando
+    um agendamento pendente foi criado e aguarda confirmação SIM/NÃO.
     """
-    messages = (
-        db.query(MessageLog)
-        .filter(
-            MessageLog.tenant_id == tenant_id,
-            (MessageLog.from_phone == phone) | (MessageLog.to_phone == phone),
-        )
-        .order_by(MessageLog.created_at.desc())
-        .limit(HISTORY_LIMIT)
-        .all()
+    system = SYSTEM_PROMPT
+    if tenant_context:
+        system = f"Contexto da clínica: {tenant_context}\n\n" + system
+
+    model = genai.GenerativeModel(
+        model_name="gemini-1.5-flash",
+        system_instruction=system,
+        tools=_build_gemini_tools(has_scheduling),
     )
 
-    # Reverte para ordem cronológica
-    messages = list(reversed(messages))
+    # Monta histórico no formato Gemini
+    chat_history = []
+    for msg in history:
+        role = "user" if msg.get("role") == "user" else "model"
+        chat_history.append({"role": role, "parts": [{"text": msg.get("content", "")}]})
 
-    history = []
-    for m in messages:
-        if m.direction == "in":
-            history.append(f"Paciente: {m.message}")
-        else:
-            history.append(f"Luna: {m.message}")
-    return history
+    chat = model.start_chat(history=chat_history)
+
+    # Primeira resposta
+    response = await _send_async(chat, message)
+    pending_info = None
+
+    # Loop de function calling (máximo 3 iterações para evitar loop infinito)
+    for _ in range(3):
+        tool_calls = _extract_tool_calls(response)
+        if not tool_calls:
+            break
+
+        tool_results = []
+        for call in tool_calls:
+            tool_result = await execute_tool(
+                tool_name=call["name"],
+                args=call["args"],
+                db=db,
+                tenant_id=tenant_id,
+                patient_phone=patient_phone,
+            )
+            logger.info(f"[tool={call['name']}] result: {tool_result[:120]}")
+
+            # Detecta agendamento pendente
+            if tool_result.startswith("AGENDAMENTO_PENDENTE|"):
+                pending_info = _parse_pending_info(tool_result)
+
+            tool_results.append(
+                {
+                    "function_response": {
+                        "name": call["name"],
+                        "response": {"result": tool_result},
+                    }
+                }
+            )
+
+        response = await _send_tool_results_async(chat, tool_results)
+
+    text = _extract_text(response)
+    return text, pending_info
 
 
-async def get_ai_response(message: str, tenant, phone: str) -> str:
-    db = SessionLocal()
+# ─────────────────────────────────────────────────────────────────────────────
+# Helpers internos
+# ─────────────────────────────────────────────────────────────────────────────
+
+async def _send_async(chat, message: str):
+    """Wrapper assíncrono para chat.send_message (SDK síncrono)."""
+    import asyncio
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, chat.send_message, message)
+
+
+async def _send_tool_results_async(chat, tool_results: list):
+    import asyncio
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, chat.send_message, tool_results)
+
+
+def _extract_tool_calls(response) -> list[dict]:
+    calls = []
     try:
-        # ✅ Carrega histórico do banco — persiste entre deploys e crashes
-        history = load_history(db, tenant.id, phone)
-    finally:
-        db.close()
+        for part in response.candidates[0].content.parts:
+            if hasattr(part, "function_call") and part.function_call:
+                calls.append({
+                    "name": part.function_call.name,
+                    "args": dict(part.function_call.args),
+                })
+    except (AttributeError, IndexError):
+        pass
+    return calls
 
-    # Adiciona a mensagem atual ao histórico (ainda não está no banco neste momento)
-    history.append(f"Paciente: {message}")
-    if len(history) > HISTORY_LIMIT:
-        history = history[-HISTORY_LIMIT:]
 
-    history_text = "\n".join(history)
-    services_text = await get_services_list(tenant.id)
+def _extract_text(response) -> str:
+    try:
+        return response.text
+    except Exception:
+        try:
+            parts = response.candidates[0].content.parts
+            return " ".join(p.text for p in parts if hasattr(p, "text") and p.text)
+        except Exception:
+            return "Desculpe, não consegui processar sua mensagem."
 
-    prompt = ODONTO_PROMPT.format(
-        clinic_name=tenant.name,
-        dentist_name=getattr(tenant, 'dentist_name', ''),
-        services_list=services_text,
-        today=datetime.now().strftime('%d/%m/%Y')
-    )
 
-    full_prompt = f"{prompt}\n\nHistórico:\n{history_text}\n\nResponda direto:"
-
-    response = model.generate_content(full_prompt)
-    ai_text = response.text.strip()
-
-    return ai_text
+def _parse_pending_info(raw: str) -> dict:
+    """
+    Extrai dados do token AGENDAMENTO_PENDENTE|id=X|data=...|hora=...|procedimento=...
+    """
+    info = {}
+    for part in raw.split("|")[1:]:
+        k, _, v = part.partition("=")
+        info[k.strip()] = v.strip()
+    return info
