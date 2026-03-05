@@ -5,6 +5,7 @@ Endpoints:
   GET  /meta/webhook  → verificação do webhook pela Meta
   POST /meta/webhook  → recebimento de mensagens
 """
+import asyncio
 import os
 import hmac
 import hashlib
@@ -91,7 +92,10 @@ async def meta_webhook_receive(
                         print(f"⚠️ Nenhum tenant para número Meta: {display_phone}")
                         continue
 
-                    await process_incoming_message(from_number, body, to_number)
+                    # ✅ Responde imediatamente e processa em background
+                    asyncio.create_task(
+                        process_incoming_message(from_number, body, to_number)
+                    )
 
         return {"status": "ok"}
 

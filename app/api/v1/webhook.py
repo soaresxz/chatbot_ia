@@ -1,3 +1,4 @@
+import asyncio
 from fastapi import APIRouter, Request, Depends
 from sqlalchemy.orm import Session
 
@@ -7,6 +8,7 @@ from app.core.database import get_db
 from app.models.tenant import Tenant
 
 router = APIRouter()
+
 
 @router.post("/twilio/webhook")
 async def twilio_webhook(request: Request, db: Session = Depends(get_db)):
@@ -27,14 +29,14 @@ async def twilio_webhook(request: Request, db: Session = Depends(get_db)):
         if not tenant:
             return {"status": "ignored"}
 
-        # Mensagem da atendente → ativa modo humano para o paciente (to_number)
         if normalize(from_number) == normalize(tenant.whatsapp_number):
-            await handle_attendant_message(tenant, to_number)  # ✅ await adicionado
-            return {"status": "human_takeover"}
+            # ✅ Responde imediatamente e processa em background
+            asyncio.create_task(handle_attendant_message(tenant, to_number))
+            return {"status": "queued"}
 
-        # Mensagem do paciente
-        await process_incoming_message(from_number, body, to_number)
-        return {"status": "processed"}
+        # ✅ Responde imediatamente ao Twilio/Meta e processa em background
+        asyncio.create_task(process_incoming_message(from_number, body, to_number))
+        return {"status": "queued"}
 
     except Exception as e:
         print(f"❌ Erro no webhook: {e}")
