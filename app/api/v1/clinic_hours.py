@@ -10,7 +10,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_db, get_current_user
+from app.core.database import get_db
+from app.core.auth import get_current_user
+from sqlalchemy.orm import Session
 from app.models.clinic_hours import ClinicHours, DAY_NAMES
 from app.schemas.clinic_hours import ClinicHoursCreate, ClinicHoursOut, ClinicHoursUpdate
 
@@ -18,11 +20,11 @@ router = APIRouter(prefix="/clinic-hours", tags=["clinic-hours"])
 
 
 @router.get("", response_model=list[ClinicHoursOut], summary="Lista horários configurados")
-async def list_clinic_hours(
-    db: AsyncSession = Depends(get_db),
+def list_clinic_hours(
+    db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    result = await db.execute(
+    result = db.execute(
         select(ClinicHours)
         .where(ClinicHours.tenant_id == current_user.tenant_id)
         .order_by(ClinicHours.day_of_week)
@@ -37,16 +39,16 @@ async def list_clinic_hours(
 
 
 @router.put("/{day_of_week}", response_model=ClinicHoursOut, summary="Cria ou atualiza configuração do dia")
-async def upsert_clinic_hours(
+def upsert_clinic_hours(
     day_of_week: int,
     body: ClinicHoursCreate,
-    db: AsyncSession = Depends(get_db),
+    db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
     if day_of_week not in range(7):
         raise HTTPException(status_code=422, detail="day_of_week deve estar entre 0 e 6.")
 
-    result = await db.execute(
+    result = db.execute(
         select(ClinicHours).where(
             and_(
                 ClinicHours.tenant_id == current_user.tenant_id,
@@ -61,8 +63,8 @@ async def upsert_clinic_hours(
         existing.end_time = body.end_time
         existing.slot_duration_minutes = body.slot_duration_minutes
         existing.is_active = body.is_active
-        await db.commit()
-        await db.refresh(existing)
+        db.commit()
+        db.refresh(existing)
         ch = existing
     else:
         ch = ClinicHours(
@@ -74,8 +76,8 @@ async def upsert_clinic_hours(
             is_active=body.is_active,
         )
         db.add(ch)
-        await db.commit()
-        await db.refresh(ch)
+        db.commit()
+        db.refresh(ch)
 
     out = ClinicHoursOut.from_orm(ch)
     out.day_name = DAY_NAMES.get(ch.day_of_week, "")
@@ -83,12 +85,12 @@ async def upsert_clinic_hours(
 
 
 @router.delete("/{day_of_week}", summary="Remove configuração do dia (clínica fechada)")
-async def delete_clinic_hours(
+def delete_clinic_hours(
     day_of_week: int,
-    db: AsyncSession = Depends(get_db),
+    db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    result = await db.execute(
+    result = db.execute(
         select(ClinicHours).where(
             and_(
                 ClinicHours.tenant_id == current_user.tenant_id,
@@ -99,6 +101,6 @@ async def delete_clinic_hours(
     ch = result.scalar_one_or_none()
     if not ch:
         raise HTTPException(status_code=404, detail="Configuração não encontrada para este dia.")
-    await db.delete(ch)
-    await db.commit()
+    db.delete(ch)
+    db.commit()
     return {"detail": f"Configuração de {DAY_NAMES.get(day_of_week, '')} removida."}

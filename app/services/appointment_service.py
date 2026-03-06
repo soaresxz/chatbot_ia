@@ -16,7 +16,8 @@ from typing import Optional
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import select, and_, func
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
+from app.core.auth import get_current_user
 
 from app.models.clinic_hours import ClinicHours, DAY_NAMES
 from app.models.appointment import Appointment          # modelo existente
@@ -33,9 +34,9 @@ TZ = ZoneInfo("America/Sao_Paulo")
 # Disponibilidade
 # ─────────────────────────────────────────────────────────────────────────────
 
-async def get_clinic_hours_for_day(db: AsyncSession, tenant_id: int, day_of_week: int) -> Optional[ClinicHours]:
+def get_clinic_hours_for_day(db: Session, tenant_id: int, day_of_week: int) -> Optional[ClinicHours]:
     """Retorna as configurações de horário para um dia da semana."""
-    result = await db.execute(
+    result = db.execute(
         select(ClinicHours).where(
             and_(
                 ClinicHours.tenant_id == tenant_id,
@@ -60,8 +61,8 @@ def _generate_slots(start: time, end: time, duration_minutes: int) -> list[str]:
     return slots
 
 
-async def get_available_slots(
-    db: AsyncSession,
+def get_available_slots(
+    db: Session,
     tenant_id: int,
     target_date: date,
 ) -> dict:
@@ -70,7 +71,7 @@ async def get_available_slots(
     Desconta horários já ocupados por agendamentos confirmados/pendentes.
     """
     day_of_week = target_date.weekday()  # 0=Segunda … 6=Domingo
-    hours = await get_clinic_hours_for_day(db, tenant_id, day_of_week)
+    hours = get_clinic_hours_for_day(db, tenant_id, day_of_week)
 
     if not hours:
         return {
@@ -86,7 +87,7 @@ async def get_available_slots(
     day_start = datetime.combine(target_date, time(0, 0))
     day_end = datetime.combine(target_date, time(23, 59, 59))
 
-    result = await db.execute(
+    result = db.execute(
         select(Appointment.scheduled_date).where(
             and_(
                 Appointment.tenant_id == tenant_id,
@@ -113,8 +114,8 @@ async def get_available_slots(
 # CRUD de agendamentos
 # ─────────────────────────────────────────────────────────────────────────────
 
-async def create_appointment(
-    db: AsyncSession,
+def create_appointment(
+    db: Session,
     tenant_id: int,
     data: AppointmentCreate,
 ) -> Appointment:
@@ -125,7 +126,7 @@ async def create_appointment(
     patient_id = data.patient_id
 
     if not patient_id and data.patient_phone:
-        patient_id = await _get_or_create_patient(
+        patient_id = _get_or_create_patient(
             db, tenant_id, data.patient_phone, data.patient_name
         )
 
@@ -141,15 +142,15 @@ async def create_appointment(
         notes=data.notes,
     )
     db.add(appt)
-    await db.commit()
-    await db.refresh(appt)
+    db.commit()
+    db.refresh(appt)
     logger.info(f"[tenant={tenant_id}] Agendamento criado id={appt.id} para {data.patient_phone}")
     return appt
 
 
-async def confirm_appointment(db: AsyncSession, appointment_id: int, tenant_id: int) -> Optional[Appointment]:
+def confirm_appointment(db:Session, appointment_id: int, tenant_id: int) -> Optional[Appointment]:
     """Confirma um agendamento pendente."""
-    result = await db.execute(
+    result = db.execute(
         select(Appointment).where(
             and_(Appointment.id == appointment_id, Appointment.tenant_id == tenant_id)
         )
@@ -160,14 +161,14 @@ async def confirm_appointment(db: AsyncSession, appointment_id: int, tenant_id: 
 
     appt.status = AppointmentStatus.CONFIRMADO
     appt.confirmed_at = datetime.now(TZ)
-    await db.commit()
-    await db.refresh(appt)
+    db.commit()
+    db.refresh(appt)
     return appt
 
 
-async def cancel_appointment(db: AsyncSession, appointment_id: int, tenant_id: int) -> Optional[Appointment]:
+def cancel_appointment(db: Session, appointment_id: int, tenant_id: int) -> Optional[Appointment]:
     """Cancela um agendamento."""
-    result = await db.execute(
+    result = db.execute(
         select(Appointment).where(
             and_(Appointment.id == appointment_id, Appointment.tenant_id == tenant_id)
         )
@@ -177,13 +178,13 @@ async def cancel_appointment(db: AsyncSession, appointment_id: int, tenant_id: i
         return None
 
     appt.status = AppointmentStatus.CANCELADO
-    await db.commit()
-    await db.refresh(appt)
+    db.commit()
+    db.refresh(appt)
     return appt
 
 
-async def list_appointments(
-    db: AsyncSession,
+def list_appointments(
+    db: Session,
     tenant_id: int,
     filter: str = "todos",     # "hoje" | "amanha" | "pendentes" | "todos"
     page: int = 1,
@@ -214,7 +215,7 @@ async def list_appointments(
         query = query.where(Appointment.status == AppointmentStatus.PENDENTE)
 
     count_query = select(func.count()).select_from(query.subquery())
-    total = (await db.execute(count_query)).scalar_one()
+    total = (db.execute(count_query)).scalar_one()
 
     query = (
         query
@@ -222,7 +223,7 @@ async def list_appointments(
         .offset((page - 1) * page_size)
         .limit(page_size)
     )
-    result = await db.execute(query)
+    result = db.execute(query)
     items = result.scalars().all()
 
     return {"items": items, "total": total, "page": page, "page_size": page_size}
@@ -232,11 +233,11 @@ async def list_appointments(
 # Helpers internos
 # ─────────────────────────────────────────────────────────────────────────────
 
-async def _get_or_create_patient(
-    db: AsyncSession, tenant_id: int, phone: str, name: Optional[str]
+def _get_or_create_patient(
+    db: Session, tenant_id: int, phone: str, name: Optional[str]
 ) -> int:
     """Busca paciente pelo telefone ou cria um novo registro."""
-    result = await db.execute(
+    result = db.execute(
         select(Patient).where(
             and_(Patient.tenant_id == tenant_id, Patient.phone == phone)
         )
@@ -251,12 +252,12 @@ async def _get_or_create_patient(
         name=name or "Paciente via WhatsApp",
     )
     db.add(patient)
-    await db.flush()
+    db.flush()
     return patient.id
 
 
-async def get_appointment_by_id(db: AsyncSession, appointment_id: int, tenant_id: int) -> Optional[Appointment]:
-    result = await db.execute(
+def get_appointment_by_id(db: Session, appointment_id: int, tenant_id: int) -> Optional[Appointment]:
+    result = db.execute(
         select(Appointment).where(
             and_(Appointment.id == appointment_id, Appointment.tenant_id == tenant_id)
         )
