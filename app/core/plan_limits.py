@@ -7,38 +7,36 @@ Planos:
   enterprise → ilimitado | todas as features + integrações customizadas
 """
 
-from sqlalchemy import select, func
-from sqlalchemy.ext.asyncio import AsyncSession
+from datetime import datetime
+from sqlalchemy.orm import Session
+from sqlalchemy import func, select
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Limites de mensagens
-# ─────────────────────────────────────────────────────────────────────────────
+# ── Limites de mensagens ──────────────────────────────────────────────────────
 
-PLAN_MESSAGE_LIMITS: dict[str, int | None] = {
+# PLAN_LIMITS mantido para compatibilidade com dashboard_service.py
+PLAN_LIMITS: dict[str, int | None] = {
     "basic": 3_000,
     "pro": 10_000,
     "enterprise": None,   # ilimitado
 }
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Permissões de features
-# ─────────────────────────────────────────────────────────────────────────────
+# Alias novo (usado internamente nos arquivos novos)
+PLAN_MESSAGE_LIMITS = PLAN_LIMITS
 
-# Agendamento via bot (criar, confirmar, consultar horários)
+# ── Permissões de features ────────────────────────────────────────────────────
+
 PLAN_SCHEDULING: dict[str, bool] = {
     "basic": False,
     "pro": True,
     "enterprise": True,
 }
 
-# Relatórios avançados
 PLAN_REPORTS: dict[str, bool] = {
     "basic": False,
     "pro": True,
     "enterprise": True,
 }
 
-# Integrações customizadas
 PLAN_CUSTOM_INTEGRATIONS: dict[str, bool] = {
     "basic": False,
     "pro": False,
@@ -47,54 +45,39 @@ PLAN_CUSTOM_INTEGRATIONS: dict[str, bool] = {
 
 
 def has_feature(plan: str, feature: str) -> bool:
-    """
-    Verifica se o plano possui determinada feature.
-
-    Args:
-        plan: "basic" | "pro" | "enterprise"
-        feature: "scheduling" | "reports" | "custom_integrations"
-
-    Returns:
-        True se o plano tem acesso.
-    """
     mapping = {
         "scheduling": PLAN_SCHEDULING,
         "reports": PLAN_REPORTS,
         "custom_integrations": PLAN_CUSTOM_INTEGRATIONS,
     }
-    feature_map = mapping.get(feature, {})
-    return feature_map.get(plan.lower(), False)
+    return mapping.get(feature, {}).get(plan.lower(), False)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Verificação assíncrona de limite mensal
-# ─────────────────────────────────────────────────────────────────────────────
+# ── Contagem mensal de mensagens ──────────────────────────────────────────────
 
-async def check_plan_limit(
-    db: AsyncSession, tenant_id: int, plan: str
-) -> tuple[bool, int | None]:
+def get_monthly_message_count(db: Session, tenant_id: str) -> int:
+    """Retorna o total de mensagens enviadas pelo bot no mês atual."""
+    from app.models.message_log import MessageLog
+
+    start_of_month = datetime.utcnow().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+    return db.query(func.count(MessageLog.id)).filter(
+        MessageLog.tenant_id == tenant_id,
+        MessageLog.created_at >= start_of_month,
+        MessageLog.direction == "out",
+    ).scalar() or 0
+
+
+def check_plan_limit(db: Session, tenant_id: str, plan: str) -> tuple[bool, int | None]:
     """
-    Verifica se o tenant ainda está dentro do limite mensal de mensagens.
+    Verifica se o tenant ainda está dentro do limite mensal.
 
     Returns:
         (allowed: bool, limit: int | None)
     """
-    limit = PLAN_MESSAGE_LIMITS.get(plan.lower())
+    limit = PLAN_LIMITS.get(plan.lower())
     if limit is None:
         return True, None  # enterprise → ilimitado
 
-    from app.models.message_log import MessageLog
-    from datetime import datetime
-
-    now = datetime.utcnow()
-    start_of_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-
-    result = await db.execute(
-        select(func.count(MessageLog.id)).where(
-            MessageLog.tenant_id == tenant_id,
-            MessageLog.created_at >= start_of_month,
-            MessageLog.direction == "outbound",
-        )
-    )
-    count = result.scalar_one()
+    count = get_monthly_message_count(db, tenant_id)
     return count < limit, limit
