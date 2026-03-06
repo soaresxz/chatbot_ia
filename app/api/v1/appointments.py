@@ -1,15 +1,4 @@
-"""
-Endpoints de agendamentos.
-
-GET    /appointments?filter=hoje|amanha|pendentes|todos&page=1
-GET    /appointments/{id}
-PATCH  /appointments/{id}/status
-GET    /appointments/slots?date=YYYY-MM-DD
-DELETE /appointments/{id}
-"""
-
 from datetime import date
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
@@ -23,10 +12,6 @@ from app.services import appointment_service as svc
 router = APIRouter(prefix="/appointments", tags=["appointments"])
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Listar agendamentos
-# ─────────────────────────────────────────────────────────────────────────────
-
 @router.get("", summary="Lista agendamentos com filtro")
 def list_appointments(
     filter: str = Query("todos", description="hoje | amanha | pendentes | todos"),
@@ -35,45 +20,28 @@ def list_appointments(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    result = svc.list_appointments(
-        db=db,
-        tenant_id=current_user.tenant_id,
-        filter=filter,
-        page=page,
-        page_size=page_size,
-    )
-    return result
+    return svc.list_appointments(db=db, tenant_id=current_user.tenant_id,
+                                 filter=filter, page=page, page_size=page_size)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Horários disponíveis
-# ─────────────────────────────────────────────────────────────────────────────
-
-@router.get("/slots", response_model=AvailableSlotsResponse, summary="Retorna slots disponíveis para uma data")
+@router.get("/slots", response_model=AvailableSlotsResponse, summary="Slots disponíveis para uma data")
 def get_available_slots(
-    date_str: str = Query(..., alias="date", description="Data no formato YYYY-MM-DD"),
+    date_str: str = Query(..., alias="date", description="YYYY-MM-DD"),
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
     if not has_feature(current_user.tenant.plan, "scheduling"):
         raise HTTPException(status_code=403, detail="Agendamentos disponíveis apenas nos planos Pro e Enterprise.")
-
     try:
         target_date = date.fromisoformat(date_str)
     except ValueError:
         raise HTTPException(status_code=422, detail="Formato de data inválido. Use YYYY-MM-DD.")
-
-    result = svc.get_available_slots(db, current_user.tenant_id, target_date)
-    return result
+    return svc.get_available_slots(db, current_user.tenant_id, target_date)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Detalhe
-# ─────────────────────────────────────────────────────────────────────────────
-
-@router.get("/{appointment_id}", response_model=AppointmentOut, summary="Retorna um agendamento pelo ID")
+@router.get("/{appointment_id}", response_model=AppointmentOut, summary="Retorna agendamento pelo ID")
 def get_appointment(
-    appointment_id: int,
+    appointment_id: str,          # UUID
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
@@ -83,13 +51,9 @@ def get_appointment(
     return appt
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Atualizar status
-# ─────────────────────────────────────────────────────────────────────────────
-
-@router.patch("/{appointment_id}/status", response_model=AppointmentOut, summary="Altera status do agendamento")
+@router.patch("/{appointment_id}/status", response_model=AppointmentOut, summary="Altera status")
 def update_appointment_status(
-    appointment_id: int,
+    appointment_id: str,          # UUID
     body: AppointmentUpdate,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
@@ -103,22 +67,16 @@ def update_appointment_status(
     elif body.status == AppointmentStatus.CANCELADO:
         appt = svc.cancel_appointment(db, appointment_id, current_user.tenant_id)
     else:
-        # Atualização genérica dos demais campos
         for field, value in body.dict(exclude_unset=True).items():
             setattr(appt, field, value)
         db.commit()
         db.refresh(appt)
-
     return appt
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Excluir
-# ─────────────────────────────────────────────────────────────────────────────
-
-@router.delete("/{appointment_id}", summary="Remove um agendamento")
+@router.delete("/{appointment_id}", summary="Remove agendamento")
 def delete_appointment(
-    appointment_id: int,
+    appointment_id: str,          # UUID
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
