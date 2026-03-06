@@ -1,4 +1,6 @@
-from sqlalchemy import Column, Integer, Time, Boolean, ForeignKey, UniqueConstraint
+import uuid
+
+from sqlalchemy import Column, Integer, String, Time, Boolean, ForeignKey, UniqueConstraint
 from app.core.database import Base
 
 DAY_NAMES = {
@@ -23,8 +25,8 @@ class ClinicHours(Base):
         UniqueConstraint("tenant_id", "day_of_week", name="uq_tenant_day"),
     )
 
-    id = Column(Integer, primary_key=True, index=True)
-    tenant_id = Column(Integer, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    id = Column(String, primary_key=True, index=True, default=lambda: str(uuid.uuid4()))
+    tenant_id = Column(String, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
     day_of_week = Column(Integer, nullable=False)          # 0=Segunda … 6=Domingo
     start_time = Column(Time, nullable=False)
     end_time = Column(Time, nullable=False)
