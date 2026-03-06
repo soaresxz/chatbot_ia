@@ -10,7 +10,7 @@ from app.core.plan_limits import check_plan_limit, PLAN_SCHEDULING
 from app.models.conversation_status import ConversationStatus
 from app.services import appointment_service as appt_svc
 from app.services.ai.gemini_agent import generate_response
-from app.services.whatsapp.provider_factory import get_whatsapp_provider
+from app.services.whatsapp.provider_factory import get_provider
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +41,7 @@ def process_incoming_message(
     # ── 2. Limite de plano ──────────────────────────────────────────────────
     allowed, _ = check_plan_limit(db, tenant_id, tenant.plan)
     if not allowed:
-        provider = get_whatsapp_provider(tenant)
+        provider = get_provider(tenant)
         provider.send_message(
             to=patient_phone,
             message="Desculpe, nossa clínica atingiu o limite mensal de mensagens. Entre em contato diretamente.",
@@ -75,7 +75,7 @@ def process_incoming_message(
         db.commit()
 
     # ── 6. Envia resposta ───────────────────────────────────────────────────
-    provider = get_whatsapp_provider(tenant)
+    provider = get_provider(tenant)
     provider.send_message(to=patient_phone, message=response_text)
     _log_messages(db, tenant_id, patient_phone, tenant.whatsapp_number, message_text, response_text)
 
@@ -92,7 +92,7 @@ def _handle_confirmation(
 ) -> bool:
     normalized = _normalize(message_text)
     pending    = conv_status.pending_confirmation
-    provider   = get_whatsapp_provider(tenant)
+    provider   = get_provider(tenant)
 
     if normalized in _YES_WORDS:
         appt_id = pending.get("id", "")          # UUID string
