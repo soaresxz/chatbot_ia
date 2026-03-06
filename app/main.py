@@ -15,6 +15,8 @@ from app.api.v1.conversations import router as conversations_router
 from app.api.v1.routers.dashboard import router as dashboard_router
 from app.api.v1.reports import router as reports_router
 from app.api.v1.auth import router as auth_router
+from app.api.v1.appointments import router as appointments_router
+from app.api.v1.clinic_hours import router as clinic_hours_router
 
 # ── Novos routers ────────────────────────────────────────────
 from app.api.v1.admin import router as admin_router           # /admin/...
@@ -59,7 +61,9 @@ app.include_router(send_router,              prefix="/api")
 app.include_router(human_send_router,        prefix="/api")
 app.include_router(conversations_router,     prefix="/api/v1")
 app.include_router(auth_router,              prefix="/api/v1")
-app.include_router(assume_release_router,    prefix="/api/v1")  # /api/v1/conversations/assume|release
+app.include_router(assume_release_router,    prefix="/api/v1") # /api/v1/conversations/assume|release
+app.include_router(appointments_router,      prefix="/api/v1")
+app.include_router(clinic_hours_router,       prefix="/api/v1")
 
 # Routers SEM prefixo adicional (paths já definidos nos routers)
 app.include_router(dashboard_router)    # /dashboard/clinica/{id}
