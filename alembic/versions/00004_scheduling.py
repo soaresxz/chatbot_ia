@@ -29,8 +29,8 @@ def upgrade():
     # ── 1. clinic_hours ─────────────────────────────────────────────────────
     op.create_table(
         "clinic_hours",
-        sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
-        sa.Column("tenant_id", sa.Integer(), sa.ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("id", sa.Integer(), primary_key=True),
+        sa.Column("tenant_id", sa.String(255), sa.ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False),
         sa.Column("day_of_week", sa.Integer(), nullable=False),
         sa.Column("start_time", sa.Time(), nullable=False),
         sa.Column("end_time", sa.Time(), nullable=False),
