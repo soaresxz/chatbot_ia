@@ -1,133 +1,234 @@
-import uuid
-from datetime import datetime
-from sqlalchemy.orm import Session
+"""
+WhatsApp Service — Processa mensagens recebidas.
 
-from app.core.database import SessionLocal
-from app.models.tenant import Tenant
-from app.models.message_log import MessageLog
+Fluxo de mensagem:
+1. Verificar modo humano → se ativo, ignora IA
+2. Verificar limite de plano → se excedido, notifica e para
+3. Verificar confirmação pendente (SIM/NÃO) → confirma/cancela agendamento
+4. Enviar para Gemini → obter resposta
+5. Se Gemini retornou agendamento pendente → salvar na conversa e pedir confirmação
+6. Enviar resposta ao paciente
+"""
+
+from __future__ import annotations
+
+import logging
+import re
+from datetime import datetime, timedelta
+from typing import Optional
+
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.plan_limits import check_plan_limit, PLAN_SCHEDULING
 from app.models.conversation_status import ConversationStatus
-from app.services.whatsapp.provider_factory import get_provider
-from app.services.intent_matcher import get_quick_response
-from app.services.basic_bot import handle_basic_plan
-from app.services.ai.gemini_agent import get_ai_response
-from app.core.websocket_manager import broadcast
-from app.core.plan_limits import check_plan_limit, LIMIT_REACHED_MESSAGE
+from app.services import appointment_service as appt_svc
+from app.services.ai.gemini_agent import generate_response
+from app.services.whatsapp.provider_factory import get_whatsapp_provider
 
-FALLBACK_MESSAGE = "Aguarde um momento. Uma atendente vai te responder em breve. 😊"
+logger = logging.getLogger(__name__)
 
-
-def normalize_phone(phone: str) -> str:
-    """Remove 'whatsapp:' e garante '+' no início."""
-    clean = phone.replace("whatsapp:", "").replace(" ", "").strip()
-    if clean and not clean.startswith("+"):
-        clean = "+" + clean
-    return clean
+# Palavras reconhecidas como confirmação / cancelamento
+_YES_WORDS = {"sim", "s", "confirmar", "confirmo", "ok", "yes"}
+_NO_WORDS = {"nao", "não", "n", "cancelar", "cancelo", "no"}
 
 
-async def process_incoming_message(from_number: str, body: str, to_number: str):
-    db: Session = SessionLocal()
-    try:
-        from_clean = normalize_phone(from_number)
-        to_clean = normalize_phone(to_number)
+def process_incoming_message(
+    db: AsyncSession,
+    tenant_id: int,
+    tenant: object,
+    patient_phone: str,
+    message_text: str,
+) -> None:
+    """Ponto central de processamento de mensagens recebidas."""
 
-        tenant = db.query(Tenant).filter(
-            Tenant.whatsapp_number.ilike(f"%{to_clean.replace('+', '')}%")
-        ).first()
+    # ── 1. Modo humano ──────────────────────────────────────────────────────
+    conv_status = _get_or_create_conversation(db, tenant_id, patient_phone)
 
-        if not tenant:
-            print(f"⚠️ Nenhum tenant encontrado para o número: {to_number}")
-            return
-
-        # Verifica se modo humano está ativo para este paciente
-        status = db.query(ConversationStatus).filter(
-            ConversationStatus.tenant_id == tenant.id,
-            ConversationStatus.patient_phone == from_clean,
-            ConversationStatus.human_mode_active == True
-        ).first()
-
-        human_mode = False
-        if status:
-            if status.human_mode_until is None or datetime.utcnow() < status.human_mode_until:
-                human_mode = True
-                print(f"🙋 Modo humano ativo para {from_clean}, bot pausado.")
-
-        # ✅ Sempre salva a mensagem recebida e faz broadcast — independente do modo
-        now_in = datetime.utcnow()
-        log_in = MessageLog(
-            id=str(uuid.uuid4()),
-            tenant_id=tenant.id,
-            from_phone=from_clean,   # ✅ normalizado
-            to_phone=to_clean,       # ✅ normalizado
-            message=body,
-            direction="in",
-            created_at=now_in
-        )
-        db.add(log_in)
-        db.commit()
-
-        await broadcast({
-            "type": "new_message",
-            "tenant_id": tenant.id,
-            "patient_phone": from_clean,
-            "message": {
-                "id": log_in.id,
-                "content": body,
-                "direction": "in",
-                "timestamp": now_in.isoformat(),
-                "sender_name": None,
-            }
-        })
-
-        # ✅ Se modo humano, para aqui — mensagem já foi salva e transmitida
-        if human_mode:
-            return
-
-        # ✅ Verifica limite do plano antes de responder
-        allowed, reason = check_plan_limit(db, tenant)
-        if not allowed:
-            print(f"🚫 Limite de plano atingido para {tenant.id}: {reason}")
-            provider = TwilioProvider()
-            await provider.send_message(f"whatsapp:{from_clean}", LIMIT_REACHED_MESSAGE)
-            return
-
-        # Gera resposta conforme plano
-        if tenant.plan == "basic":
-            response_text = await handle_basic_plan(body, from_clean, tenant)
+    if conv_status.human_mode_active:
+        if conv_status.human_mode_until and conv_status.human_mode_until < datetime.utcnow():
+            # Expirou → sai do modo humano
+            conv_status.human_mode_active = False
+            conv_status.pending_confirmation = None
+            db.commit()
         else:
-            quick = get_quick_response(body, tenant.name or "clínica")
-            response_text = quick or await get_ai_response(body, tenant, from_clean) or FALLBACK_MESSAGE
+            logger.info(f"[tenant={tenant_id}] Modo humano ativo para {patient_phone} — mensagem ignorada pela IA")
+            return
 
-        # Envia resposta
-        provider = get_provider(tenant)
-        await provider.send_message(f"whatsapp:{from_clean}", response_text)
-
-        now_out = datetime.utcnow()
-        log_out = MessageLog(
-            id=str(uuid.uuid4()),
-            tenant_id=tenant.id,
-            from_phone=to_clean,     # ✅ número da clínica normalizado
-            to_phone=from_clean,     # ✅ número do paciente normalizado
-            message=response_text,
-            direction="out",
-            created_at=now_out
+    # ── 2. Limite de plano ──────────────────────────────────────────────────
+    allowed, msg_limit = check_plan_limit(db, tenant_id, tenant.plan)
+    if not allowed:
+        provider = get_whatsapp_provider(tenant)
+        provider.send_message(
+            to=patient_phone,
+            message="Desculpe, nossa clínica atingiu o limite mensal de mensagens. Entre em contato diretamente.",
         )
-        db.add(log_out)
+        return
+
+    # ── 3. Confirmação pendente (SIM / NÃO) ────────────────────────────────
+    if conv_status.pending_confirmation:
+        handled = _handle_confirmation(
+            db, tenant, tenant_id, patient_phone, message_text, conv_status
+        )
+        if handled:
+            return
+
+    # ── 4. Gemini ───────────────────────────────────────────────────────────
+    has_scheduling = PLAN_SCHEDULING.get(tenant.plan, False)
+
+    # Monta contexto do tenant para o agente
+    tenant_context = f"{getattr(tenant, 'name', '')} | {getattr(tenant, 'dentist_name', '')}"
+
+    history = _build_history(conv_status)
+
+    response_text, pending_info = generate_response(
+        message=message_text,
+        history=history,
+        db=db,
+        tenant_id=tenant_id,
+        patient_phone=patient_phone,
+        has_scheduling=has_scheduling,
+        tenant_context=tenant_context,
+    )
+
+    # ── 5. Salva agendamento pendente na conversa ───────────────────────────
+    if pending_info:
+        conv_status.pending_confirmation = pending_info
         db.commit()
 
-        await broadcast({
-            "type": "new_message",
-            "tenant_id": tenant.id,
-            "patient_phone": from_clean,
-            "message": {
-                "id": log_out.id,
-                "content": response_text,
-                "direction": "out",
-                "timestamp": now_out.isoformat(),
-                "sender_name": "Bot",
-            }
-        })
+    # ── 6. Envia resposta ───────────────────────────────────────────────────
+    provider = get_whatsapp_provider(tenant)
+    provider.send_message(to=patient_phone, message=response_text)
 
-        print(f"✅ Resposta enviada para {from_clean}")
+    # Salva no histórico de mensagens (message_log)
+    _log_messages(db, tenant_id, patient_phone, tenant.whatsapp_number, message_text, response_text)
 
-    finally:
-        db.close()
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Confirmação SIM / NÃO
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _handle_confirmation(
+    db: AsyncSession,
+    tenant,
+    tenant_id: int,
+    patient_phone: str,
+    message_text: str,
+    conv_status: ConversationStatus,
+) -> bool:
+    """
+    Verifica se a mensagem é uma resposta SIM/NÃO para agendamento pendente.
+    Retorna True se a mensagem foi tratada aqui (não precisa ir para a IA).
+    """
+    normalized = _normalize(message_text)
+    pending = conv_status.pending_confirmation  # dict: {id, data, hora, procedimento}
+
+    provider = get_whatsapp_provider(tenant)
+
+    if normalized in _YES_WORDS:
+        appt_id = int(pending.get("id", 0))
+        appt = appt_svc.confirm_appointment(db, appt_id, tenant_id)
+        conv_status.pending_confirmation = None
+        db.commit()
+
+        if appt:
+            reply = (
+                f"✅ Agendamento confirmado!\n"
+                f"📅 {pending.get('data', '')} às {pending.get('hora', '')}\n"
+                f"🦷 {pending.get('procedimento', 'Consulta')}\n\n"
+                f"Te esperamos! Em caso de imprevisto, entre em contato para reagendar."
+            )
+        else:
+            reply = "Não encontrei o agendamento para confirmar. Por favor, refaça o agendamento."
+
+        provider.send_message(to=patient_phone, message=reply)
+        return True
+
+    if normalized in _NO_WORDS:
+        appt_id = int(pending.get("id", 0))
+        appt_svc.cancel_appointment(db, appt_id, tenant_id)
+        conv_status.pending_confirmation = None
+        db.commit()
+
+        reply = (
+            "Agendamento cancelado. Se quiser marcar em outro horário, é só me dizer! 😊"
+        )
+        provider.send_message(to=patient_phone, message=reply)
+        return True
+
+    # Mensagem ambígua → volta para IA, mas mantém pending para próxima tentativa
+    return False
+
+
+def _normalize(text: str) -> str:
+    """Remove acentos, lowercase e espaços extras."""
+    import unicodedata
+    nfkd = unicodedata.normalize("NFKD", text.strip().lower())
+    return "".join(c for c in nfkd if not unicodedata.combining(c))
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Helpers
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _get_or_create_conversation(
+    db: AsyncSession, tenant_id: int, patient_phone: str
+) -> ConversationStatus:
+    from sqlalchemy import select, and_
+    result = db.execute(
+        select(ConversationStatus).where(
+            and_(
+                ConversationStatus.tenant_id == tenant_id,
+                ConversationStatus.patient_phone == patient_phone,
+            )
+        )
+    )
+    conv = result.scalar_one_or_none()
+    if not conv:
+        conv = ConversationStatus(
+            tenant_id=tenant_id,
+            patient_phone=patient_phone,
+            human_mode_active=False,
+        )
+        db.add(conv)
+        db.commit()
+        db.refresh(conv)
+    return conv
+
+
+def _build_history(conv_status: ConversationStatus) -> list[dict]:
+    """Reconstrói histórico da conversa a partir do message_log armazenado."""
+    if not hasattr(conv_status, "message_log") or not conv_status.message_log:
+        return []
+    return conv_status.message_log  # já deve estar no formato [{role, content}]
+
+
+def _log_messages(
+    db: AsyncSession,
+    tenant_id: int,
+    patient_phone: str,
+    clinic_number: str,
+    user_message: str,
+    bot_reply: str,
+) -> None:
+    """Salva mensagem do paciente e resposta do bot na tabela message_log."""
+    from app.models.message_log import MessageLog  # ajuste conforme seu modelo
+    now = datetime.utcnow()
+    db.add_all([
+        MessageLog(
+            tenant_id=tenant_id,
+            from_phone=patient_phone,
+            to_phone=clinic_number,
+            message=user_message,
+            direction="inbound",
+            created_at=now,
+        ),
+        MessageLog(
+            tenant_id=tenant_id,
+            from_phone=clinic_number,
+            to_phone=patient_phone,
+            message=bot_reply,
+            direction="outbound",
+            created_at=now,
+        ),
+    ])
+    db.commit()

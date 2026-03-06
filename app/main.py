@@ -9,7 +9,6 @@ from app.core.websocket_manager import active_connections
 
 # ── Routers existentes ───────────────────────────────────────
 from app.api.v1.webhook import router as webhook_router
-from app.api.v1.meta_webhook import router as meta_webhook_router
 from app.api.v1.send_message import router as send_router
 from app.api.v1.human_send import router as human_send_router
 from app.api.v1.conversations import router as conversations_router
