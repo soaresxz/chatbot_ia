@@ -1,32 +1,43 @@
-from sqlalchemy import Column, Integer, Time, Boolean, ForeignKey, UniqueConstraint
-from app.db.base_class import Base
-
-DAY_NAMES = {
-    0: "Segunda-feira",
-    1: "Terça-feira",
-    2: "Quarta-feira",
-    3: "Quinta-feira",
-    4: "Sexta-feira",
-    5: "Sábado",
-    6: "Domingo",
-}
+from datetime import time
+from typing import Optional
+from pydantic import BaseModel, validator
 
 
-class ClinicHours(Base):
-    """
-    Define os horários de funcionamento da clínica por dia da semana.
-    Cada registro representa um dia com início, fim e duração do slot.
-    Ex: Segunda, 08:00–18:00, 30 min → 20 slots disponíveis.
-    """
-    __tablename__ = "clinic_hours"
-    __table_args__ = (
-        UniqueConstraint("tenant_id", "day_of_week", name="uq_tenant_day"),
-    )
+class ClinicHoursBase(BaseModel):
+    day_of_week: int
+    start_time: time
+    end_time: time
+    slot_duration_minutes: int = 30
+    is_active: bool = True
 
-    id = Column(Integer, primary_key=True, index=True)
-    tenant_id = Column(Integer, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
-    day_of_week = Column(Integer, nullable=False)          # 0=Segunda … 6=Domingo
-    start_time = Column(Time, nullable=False)
-    end_time = Column(Time, nullable=False)
-    slot_duration_minutes = Column(Integer, default=30, nullable=False)
-    is_active = Column(Boolean, default=True, nullable=False)
+    @validator("day_of_week")
+    def validate_day(cls, v):
+        if v not in range(7):
+            raise ValueError("day_of_week deve estar entre 0 e 6")
+        return v
+
+    @validator("end_time")
+    def validate_end_after_start(cls, v, values):
+        if "start_time" in values and v <= values["start_time"]:
+            raise ValueError("end_time deve ser maior que start_time")
+        return v
+
+
+class ClinicHoursCreate(ClinicHoursBase):
+    pass
+
+
+class ClinicHoursUpdate(BaseModel):
+    start_time: Optional[time] = None
+    end_time: Optional[time] = None
+    slot_duration_minutes: Optional[int] = None
+    is_active: Optional[bool] = None
+
+
+class ClinicHoursOut(ClinicHoursBase):
+    id: str
+    tenant_id: str
+    day_name: str = ""
+
+    class Config:
+        from_attributes = True
