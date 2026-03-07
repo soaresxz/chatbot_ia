@@ -1,4 +1,5 @@
 from sqlalchemy import Column, String, Boolean, DateTime, ForeignKey, func
+from sqlalchemy.orm import relationship
 from app.core.database import Base
 import uuid
 
@@ -13,6 +14,7 @@ class User(Base):
     tenant_id = Column(String, ForeignKey("tenants.id"), nullable=True)  # null para super_admin
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, server_default=func.now())
+    tenant = relationship("Tenant", back_populates="users")
 
     def __repr__(self):
         return f"<User {self.email} ({self.role})>"

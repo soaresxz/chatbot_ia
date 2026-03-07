@@ -38,7 +38,7 @@ def get_available_slots(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    tenant = _get_tenant(db, current_user.tenant_id)
+    tenant = current_user.tenant
     if not has_feature(tenant.plan, "scheduling"):
         raise HTTPException(status_code=403, detail="Agendamentos disponíveis apenas nos planos Pro e Enterprise.")
     try:
