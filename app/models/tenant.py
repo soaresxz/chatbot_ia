@@ -24,6 +24,7 @@ class Tenant(Base):
 
     appointments = relationship("Appointment", back_populates="tenant", cascade="all, delete-orphan")
     patients = relationship("Patient", back_populates="tenant", cascade="all, delete-orphan")
+    users = relationship("User", back_populates="tenant", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<Tenant {self.name}>"
