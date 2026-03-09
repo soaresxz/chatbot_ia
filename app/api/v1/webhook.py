@@ -35,9 +35,9 @@ async def twilio_webhook(request: Request, db: Session = Depends(get_db)):
             return {"status": "queued"}
 
         # ✅ Responde imediatamente ao Twilio/Meta e processa em background
-        asyncio.create_task(process_incoming_message(tenant, from_number, body))
+        asyncio.create_task(process_incoming_message(tenant=tenant, patient_phone=from_number, message_text=body))
         return {"status": "queued"}
-
+    
     except Exception as e:
         print(f"❌ Erro no webhook: {e}")
         return {"status": "error"}
