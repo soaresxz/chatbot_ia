@@ -4,7 +4,6 @@ from fastapi import APIRouter, Request, Depends
 from sqlalchemy.orm import Session
 
 from app.services.whatsapp.service import process_incoming_message
-from app.services.whatsapp.human_handler import handle_attendant_message
 from app.core.database import get_db, SessionLocal
 from app.models.tenant import Tenant
 
@@ -15,11 +14,17 @@ def normalize(n: str) -> str:
     return ''.join(filter(str.isdigit, n.replace("whatsapp:", "").replace("+", "")))
 
 
-def _run_process(tenant_id: str, tenant, patient_phone: str, message_text: str):
+def _run_process(tenant_id: str, patient_phone: str, message_text: str):
     """Executa em thread separada com sua própria sessão de DB."""
     db = SessionLocal()
     try:
-        process_incoming_message(db, tenant_id, tenant, patient_phone, message_text)
+        tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+        if tenant:
+            process_incoming_message(db, tenant_id, tenant, patient_phone, message_text)
+    except Exception as e:
+        print(f"❌ Erro ao processar mensagem: {e}")
+        import traceback
+        traceback.print_exc()
     finally:
         db.close()
 
@@ -43,15 +48,16 @@ async def twilio_webhook(request: Request, db: Session = Depends(get_db)):
         if normalize(from_number) == normalize(tenant.whatsapp_number):
             return {"status": "ignored"}
 
-        # Roda a função síncrona em thread pool sem bloquear o event loop
         loop = asyncio.get_event_loop()
         loop.run_in_executor(
             None,
-            partial(_run_process, tenant.id, tenant, from_number, body)
+            partial(_run_process, tenant.id, from_number, body)
         )
 
         return {"status": "queued"}
 
     except Exception as e:
         print(f"❌ Erro no webhook: {e}")
+        import traceback
+        traceback.print_exc()
         return {"status": "error"}
