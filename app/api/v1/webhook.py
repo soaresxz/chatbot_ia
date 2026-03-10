@@ -15,16 +15,17 @@ def normalize(n: str) -> str:
 
 
 def _run_process(tenant_id: str, patient_phone: str, message_text: str):
-    print(f"🔄 _run_process iniciado: tenant={tenant_id} phone={patient_phone} msg={message_text[:30]}")
+    print(f"🔄 _run_process iniciado: tenant={tenant_id} phone={patient_phone}")
     db = SessionLocal()
     try:
         tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
-        print(f"🏥 Tenant encontrado: {tenant}")
-        if tenant:
-            process_incoming_message(db, tenant_id, tenant, patient_phone, message_text)
-            print(f"✅ process_incoming_message concluído")
+        print(f"🏥 Tenant: {tenant.name if tenant else 'NÃO ENCONTRADO'}")
+        if not tenant:
+            return
+        process_incoming_message(db, tenant_id, tenant, patient_phone, message_text)
+        print(f"✅ Mensagem processada")
     except Exception as e:
-        print(f"❌ Erro ao processar mensagem: {e}")
+        print(f"❌ Erro: {e}")
         import traceback
         traceback.print_exc()
     finally:
@@ -59,7 +60,7 @@ async def twilio_webhook(request: Request, db: Session = Depends(get_db)):
             return {"status": "ignored"}
 
         loop = asyncio.get_event_loop()
-        loop.run_in_executor(None, partial(_run_process, tenant.id, from_number, body))
+        loop.run_in_executor(None, partial(_run_process, tenant.id, normalize(from_number), body))
         print("✅ run_in_executor chamado")
 
         return {"status": "queued"}
