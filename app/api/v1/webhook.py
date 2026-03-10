@@ -15,12 +15,14 @@ def normalize(n: str) -> str:
 
 
 def _run_process(tenant_id: str, patient_phone: str, message_text: str):
-    """Executa em thread separada com sua própria sessão de DB."""
+    print(f"🔄 _run_process iniciado: tenant={tenant_id} phone={patient_phone} msg={message_text[:30]}")
     db = SessionLocal()
     try:
         tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+        print(f"🏥 Tenant encontrado: {tenant}")
         if tenant:
             process_incoming_message(db, tenant_id, tenant, patient_phone, message_text)
+            print(f"✅ process_incoming_message concluído")
     except Exception as e:
         print(f"❌ Erro ao processar mensagem: {e}")
         import traceback
