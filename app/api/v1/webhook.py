@@ -40,21 +40,27 @@ async def twilio_webhook(request: Request, db: Session = Depends(get_db)):
         to_number   = form.get("To", "").strip()
         body        = form.get("Body", "").strip()
 
+        print(f"📩 Webhook recebido: from={from_number} to={to_number} body={body[:30]}")
+
         tenant = db.query(Tenant).filter(
             Tenant.whatsapp_number.ilike(f"%{normalize(to_number)}%")
         ).first()
 
+        print(f"🏥 Tenant encontrado: {tenant}")
+
         if not tenant:
+            print("⚠️ Tenant não encontrado — ignorado")
             return {"status": "ignored"}
 
+        print(f"📞 normalize(from)={normalize(from_number)} normalize(tenant)={normalize(tenant.whatsapp_number)}")
+
         if normalize(from_number) == normalize(tenant.whatsapp_number):
+            print("⚠️ from == tenant number — ignorado")
             return {"status": "ignored"}
 
         loop = asyncio.get_event_loop()
-        loop.run_in_executor(
-            None,
-            partial(_run_process, tenant.id, from_number, body)
-        )
+        loop.run_in_executor(None, partial(_run_process, tenant.id, from_number, body))
+        print("✅ run_in_executor chamado")
 
         return {"status": "queued"}
 
