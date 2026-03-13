@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import asyncio
 from datetime import datetime
 from typing import Optional
 
@@ -42,10 +43,10 @@ def process_incoming_message(
     allowed, _ = check_plan_limit(db, tenant_id, tenant.plan)
     if not allowed:
         provider = get_provider(tenant)
-        provider.send_message(
+        asyncio.run(provider.send_message(
             to=patient_phone,
-            message="Desculpe, nossa clínica atingiu o limite mensal de mensagens. Entre em contato diretamente.",
-        )
+            body="Desculpe, nossa clínica atingiu o limite mensal de mensagens. Entre em contato diretamente.",
+        ))
         return
 
     # ── 3. Confirmação pendente (SIM / NÃO) ────────────────────────────────
@@ -58,8 +59,6 @@ def process_incoming_message(
     has_scheduling = PLAN_SCHEDULING.get(tenant.plan, False)
     tenant_context = f"{getattr(tenant, 'name', '')} | {getattr(tenant, 'dentist_name', '')}"
     history = _build_history(conv_status)
-
-    import asyncio
 
     response_text, pending_info = asyncio.run(generate_response(
         message=message_text,
@@ -78,7 +77,7 @@ def process_incoming_message(
 
     # ── 6. Envia resposta ───────────────────────────────────────────────────
     provider = get_provider(tenant)
-    provider.send_message(to=patient_phone, message=response_text)
+    asyncio.run(provider.send_message(to=patient_phone, body=response_text))
     _log_messages(db, tenant_id, patient_phone, tenant.whatsapp_number, message_text, response_text)
 
 
@@ -109,7 +108,7 @@ def _handle_confirmation(
             f"Te esperamos! Em caso de imprevisto, entre em contato para reagendar."
         ) if appt else "Não encontrei o agendamento para confirmar. Por favor, refaça o agendamento."
 
-        provider.send_message(to=patient_phone, message=reply)
+        asyncio.run(provider.send_message(to=patient_phone, body=reply))
         return True
 
     if normalized in _NO_WORDS:
@@ -118,10 +117,10 @@ def _handle_confirmation(
         conv_status.pending_confirmation = None
         db.commit()
 
-        provider.send_message(
+        asyncio.run(provider.send_message(
             to=patient_phone,
-            message="Agendamento cancelado. Se quiser marcar em outro horário, é só me dizer! 😊",
-        )
+            body="Agendamento cancelado. Se quiser marcar em outro horário, é só me dizer! 😊",
+        ))
         return True
 
     return False
