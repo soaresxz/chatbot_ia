@@ -121,7 +121,7 @@ async def _verificar_disponibilidade(args: dict, db: AsyncSession, tenant_id: in
     except ValueError:
         return "Data inválida. Use o formato YYYY-MM-DD."
 
-    result = await svc.get_available_slots(db, tenant_id, target_date)
+    result = svc.get_available_slots(db, tenant_id, target_date)
 
     if not result["slots"]:
         msg = result.get("message", "Não há horários disponíveis nesta data.")
@@ -144,7 +144,7 @@ async def _criar_agendamento(
         return "Data/hora inválida. Use o formato YYYY-MM-DD HH:MM."
 
     # Verifica se o slot ainda está disponível
-    slots_info = await svc.get_available_slots(db, tenant_id, scheduled_dt.date())
+    slots_info = svc.get_available_slots(db, tenant_id, scheduled_dt.date())
     slot_str = scheduled_dt.strftime("%H:%M")
     if slot_str not in slots_info.get("slots", []):
         return (
@@ -160,7 +160,7 @@ async def _criar_agendamento(
         procedure=args.get("procedimento"),
         scheduled_date=scheduled_dt,
     )
-    appt = await svc.create_appointment(db, tenant_id, appt_data)
+    appt = svc.create_appointment(db, tenant_id, appt_data)
 
     return (
         f"AGENDAMENTO_PENDENTE|id={appt.id}|"
@@ -178,7 +178,7 @@ async def _listar_agendamentos_paciente(
     from app.schemas.appointment import AppointmentStatus
 
     now = datetime.utcnow()
-    result = await db.execute(
+    result = db.execute(
         select(Appointment).where(
             and_(
                 Appointment.tenant_id == tenant_id,
