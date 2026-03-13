@@ -32,6 +32,13 @@ with engine.begin() as conn:
     else:
         print("✅ Coluna pending_confirmation já existe.")
 
+    if 'message_log' not in conv_columns:
+        print("2.5️⃣ Adicionando coluna 'message_log' (JSONB) em conversation_status...")
+        conn.execute(text("ALTER TABLE conversation_status ADD COLUMN message_log JSONB DEFAULT '[]'::jsonb;"))
+        print("✅ Coluna message_log adicionada com sucesso.")
+    else:
+        print("✅ Coluna message_log já existe.")
+
     # Atualiza appointments
     appt_columns = [col['name'] for col in inspector.get_columns('appointments')]
     
