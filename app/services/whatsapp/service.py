@@ -62,7 +62,6 @@ def process_incoming_message(
     
     if quick_reply:
         provider = get_provider(tenant)
-        import asyncio
         asyncio.run(provider.send_message(to=patient_phone, body=quick_reply))
         _log_messages(db, tenant_id, patient_phone, getattr(tenant, "whatsapp_number", ""), message_text, quick_reply)
         return
