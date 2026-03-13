@@ -12,6 +12,7 @@ from app.models.conversation_status import ConversationStatus
 from app.services import appointment_service as appt_svc
 from app.services.ai.gemini_agent import generate_response
 from app.services.whatsapp.provider_factory import get_provider
+from app.services.intent_matcher import get_quick_response
 
 logger = logging.getLogger(__name__)
 
@@ -55,9 +56,20 @@ def process_incoming_message(
         if handled:
             return
 
-    # ── 4. Gemini ───────────────────────────────────────────────────────────
+    # ── 4. Intents Comuns (Respostas Rápidas) ───────────────────────────────
+    tenant_name = getattr(tenant, "name", "nossa clínica")
+    quick_reply = get_quick_response(message_text, tenant_name)
+    
+    if quick_reply:
+        provider = get_provider(tenant)
+        import asyncio
+        asyncio.run(provider.send_message(to=patient_phone, body=quick_reply))
+        _log_messages(db, tenant_id, patient_phone, getattr(tenant, "whatsapp_number", ""), message_text, quick_reply)
+        return
+
+    # ── 5. Gemini ───────────────────────────────────────────────────────────
     has_scheduling = PLAN_SCHEDULING.get(tenant.plan, False)
-    tenant_context = f"{getattr(tenant, 'name', '')} | {getattr(tenant, 'dentist_name', '')}"
+    tenant_context = f"{tenant_name} | {getattr(tenant, 'dentist_name', '')}"
     history = _build_history(conv_status)
 
     response_text, pending_info = asyncio.run(generate_response(
@@ -70,12 +82,12 @@ def process_incoming_message(
         tenant_context=tenant_context,
     ))
 
-    # ── 5. Salva agendamento pendente ───────────────────────────────────────
+    # ── 6. Salva agendamento pendente ───────────────────────────────────────
     if pending_info:
         conv_status.pending_confirmation = pending_info
         db.commit()
 
-    # ── 6. Envia resposta ───────────────────────────────────────────────────
+    # ── 7. Envia resposta ───────────────────────────────────────────────────
     provider = get_provider(tenant)
     asyncio.run(provider.send_message(to=patient_phone, body=response_text))
     _log_messages(db, tenant_id, patient_phone, tenant.whatsapp_number, message_text, response_text)
