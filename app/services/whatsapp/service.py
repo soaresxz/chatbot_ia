@@ -63,7 +63,7 @@ def process_incoming_message(
     if quick_reply:
         provider = get_provider(tenant)
         asyncio.run(provider.send_message(to=patient_phone, body=quick_reply))
-        _log_messages(db, tenant_id, patient_phone, getattr(tenant, "whatsapp_number", ""), message_text, quick_reply)
+        _log_messages(db, tenant_id, patient_phone, getattr(tenant, "whatsapp_number", ""), message_text, quick_reply, conv_status)
         return
 
     # ── 5. Gemini ───────────────────────────────────────────────────────────
@@ -89,7 +89,7 @@ def process_incoming_message(
     # ── 7. Envia resposta ───────────────────────────────────────────────────
     provider = get_provider(tenant)
     asyncio.run(provider.send_message(to=patient_phone, body=response_text))
-    _log_messages(db, tenant_id, patient_phone, tenant.whatsapp_number, message_text, response_text)
+    _log_messages(db, tenant_id, patient_phone, tenant.whatsapp_number, message_text, response_text, conv_status)
 
 
 # ── Confirmação SIM / NÃO ─────────────────────────────────────────────────────
@@ -176,6 +176,7 @@ def _log_messages(
     clinic_number: str,
     user_message: str,
     bot_reply: str,
+    conv_status: ConversationStatus = None,
 ) -> None:
     from app.models.message_log import MessageLog
     now = datetime.utcnow()
@@ -186,4 +187,11 @@ def _log_messages(
         MessageLog(id=str(uuid.uuid4()), tenant_id=tenant_id, from_phone=clinic_number, to_phone=patient_phone,
                    message=bot_reply,   direction="out", created_at=now),
     ])
+    
+    if conv_status is not None:
+        log_list = list(conv_status.message_log) if conv_status.message_log else []
+        log_list.append({"role": "user", "content": user_message})
+        log_list.append({"role": "model", "content": bot_reply})
+        conv_status.message_log = log_list[-40:]  # Keep last 40 interactions to avoid token limits
+        
     db.commit()
