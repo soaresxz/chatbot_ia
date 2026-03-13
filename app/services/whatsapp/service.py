@@ -168,10 +168,11 @@ def _log_messages(
 ) -> None:
     from app.models.message_log import MessageLog
     now = datetime.utcnow()
+    import uuid
     db.add_all([
-        MessageLog(tenant_id=tenant_id, from_phone=patient_phone, to_phone=clinic_number,
+        MessageLog(id=str(uuid.uuid4()), tenant_id=tenant_id, from_phone=patient_phone, to_phone=clinic_number,
                    message=user_message, direction="in",  created_at=now),
-        MessageLog(tenant_id=tenant_id, from_phone=clinic_number, to_phone=patient_phone,
+        MessageLog(id=str(uuid.uuid4()), tenant_id=tenant_id, from_phone=clinic_number, to_phone=patient_phone,
                    message=bot_reply,   direction="out", created_at=now),
     ])
     db.commit()
