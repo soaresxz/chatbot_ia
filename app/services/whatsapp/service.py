@@ -59,7 +59,9 @@ def process_incoming_message(
     tenant_context = f"{getattr(tenant, 'name', '')} | {getattr(tenant, 'dentist_name', '')}"
     history = _build_history(conv_status)
 
-    response_text, pending_info = generate_response(
+    import asyncio
+
+    response_text, pending_info = asyncio.run(generate_response(
         message=message_text,
         history=history,
         db=db,
@@ -67,7 +69,7 @@ def process_incoming_message(
         patient_phone=patient_phone,
         has_scheduling=has_scheduling,
         tenant_context=tenant_context,
-    )
+    ))
 
     # ── 5. Salva agendamento pendente ───────────────────────────────────────
     if pending_info:
