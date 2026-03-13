@@ -96,7 +96,16 @@ async def generate_response(
     pending_appointment_info é dict {id, data, hora, procedimento} quando
     um agendamento pendente foi criado e aguarda confirmação SIM/NÃO.
     """
-    system = SYSTEM_PROMPT
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    today_str = datetime.now(ZoneInfo("America/Sao_Paulo")).strftime("%A, %d/%m/%Y")
+    services_list = "Avaliação Clínica, Limpeza, Extração, Restauração, Clareamento, Aparelho Ortodôntico."
+    
+    system = SYSTEM_PROMPT.format(
+        clinic_name=tenant_context or "Nossa Clínica", 
+        today=today_str,
+        services_list=services_list
+    )
     if tenant_context:
         system = f"Contexto da clínica: {tenant_context}\n\n" + system
 
