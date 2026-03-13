@@ -24,8 +24,7 @@ from app.services.ai.appointment_tools import APPOINTMENT_TOOLS, execute_tool
 
 logger = logging.getLogger(__name__)
 
-# Configuração da API
-genai.configure(api_key=os.getenv("GOOGLE_API_KEY", ""))
+# A configuração será feita em tempo de execução para garantir que as vars de ambiente foram lidas
 
 SYSTEM_PROMPT = """
 
@@ -100,6 +99,10 @@ async def generate_response(
     system = SYSTEM_PROMPT
     if tenant_context:
         system = f"Contexto da clínica: {tenant_context}\n\n" + system
+
+    # Configura a API aqui para garantir leitura atualizada do enviroment
+    api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY", "")
+    genai.configure(api_key=api_key)
 
     model = genai.GenerativeModel(
         model_name="gemini-1.5-flash",
